@@ -1,0 +1,14 @@
+prometheus_url = "http://prometheus_url"
+region_id = "region_id"
+usage_data_dir = "/tmp"
+log_path = "/var/log/yig/billing.log"
+enable_cron=true
+spec = "@hourly"
+spark_home = "/home/tidb/data/deploy/spark"
+tispark_shell = "/etc/yig/billing/fetch_usage.sh"
+
+[producer]
+url="url"
+path = "path"
+accessKey = "accessKey"
+secretKey = "secretAccessKey"

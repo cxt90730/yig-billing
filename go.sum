@@ -1,0 +1,6 @@
+github.com/BurntSushi/toml v0.3.1 h1:WXkYYl6Yr3qBf1K79EBnL4mak0OimBfB0XUf9Vl28OQ=
+github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
+github.com/journeymidnight/yig v2.0.0+incompatible h1:VlUuaWzkMIK6vSA3ARJ8tag108n/T8jE0kMM9c11sH0=
+github.com/journeymidnight/yig v2.0.0+incompatible/go.mod h1:wVqHN8qELeO3cd0MJX5r2EzeLGspa9nCGjsFj2mr7BE=
+github.com/robfig/cron v1.2.0 h1:ZjScXvvxeQ63Dbyxy76Fj3AT3Ut0aKsyd2/tl3DTMuQ=
+github.com/robfig/cron v1.2.0/go.mod h1:JGuDeoQd7Z6yL4zQhZ3OPEVHB7fL6Ka6skscFHfmt2k=
