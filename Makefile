@@ -23,7 +23,7 @@ stop:
 rpm:
 	mkdir -p $(PWD)/rpmbuild/SOURCES/$(BIN_NAME)
 	go build
-	@cp ./*  $(PWD)/rpmbuild/SOURCES/$(BIN_NAME)
+	@cp ./$(NAME)*  $(PWD)/rpmbuild/SOURCES/$(BIN_NAME)
 	cd $(PWD)/rpmbuild/SOURCES && tar cvfz $(BIN_NAME).tar.gz $(BIN_NAME)
 	rpmbuild --define '_rpmfilename $(BIN_NAME).rpm' --define '_topdir $(PWD)/rpmbuild' --define 'version $(VERSION)' --define 'release $(RELEASE)' -ba --clean  $(NAME).spec
 
