@@ -1,3 +1,4 @@
 yig-billing
 .idea/
 *.test
+rpmbuild/

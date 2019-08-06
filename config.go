@@ -5,7 +5,7 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-const configPath = "/etc/yig/billing/billing.toml"
+const configPath = "/etc/yig/yig-billing.toml"
 
 type Config struct {
 	PrometheusUrl string        `toml:"prometheus_url"`
@@ -23,11 +23,11 @@ func readConfig() {
 	data, err := ioutil.ReadFile(configPath)
 	if err != nil {
 		if err != nil {
-			panic("[ERROR] Cannot open /etc/yig/billing/billing.toml")
+			panic("[ERROR] Cannot open /etc/yig/yig-billing.toml")
 		}
 	}
 	_, err = toml.Decode(string(data), &conf)
 	if err != nil {
-		panic("[ERROR] Load billing.toml error: " + err.Error())
+		panic("[ERROR] Load yig-billing.toml error: " + err.Error())
 	}
 }
