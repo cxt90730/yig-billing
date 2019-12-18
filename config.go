@@ -1,22 +1,26 @@
 package main
 
 import (
-	"io/ioutil"
 	"github.com/BurntSushi/toml"
+	"io/ioutil"
 )
 
-const configPath = "/etc/yig/yig-billing.toml"
+const configPath = "/etc/yig/billing/billing.toml"
 
 type Config struct {
-	PrometheusUrl string        `toml:"prometheus_url"`
-	RegionId      string        `toml:"region_id"`
-	UsageDataDir  string        `toml:"usage_data_dir"`
-	LogPath       string        `toml:"log_path"`
-	EnableCron    bool          `toml:"enable_cron"`
-	Spec          string        `toml:"spec"`
-	SparkHome     string        `toml:"spark_home"`
-	TisparkShell  string        `toml:"tispark_shell"`
-	Producer      DummyProducer `toml:"producer"`
+	PrometheusUrl      string        `toml:"prometheus_url"`
+	RegionId           string        `toml:"region_id"`
+	UsageDataDir       string        `toml:"usage_data_dir"`
+	BucketUsageDataDir string        `toml:"bucket_usage_data_dir"`
+	LogPath            string        `toml:"log_path"`
+	EnableCron         bool          `toml:"enable_cron"`
+	Spec               string        `toml:"spec"`
+	SparkHome          string        `toml:"spark_home"`
+	TisparkShell       string        `toml:"tispark_shell"`
+	TisparkShellBucket string        `toml:"tispark_shell_bucket"`
+	Producer           DummyProducer `toml:"producer"`
+	RedisUrl           string        `toml:"redis_url"`
+	RedisPassword      string        `toml:"redis_password"`
 }
 
 func readConfig() {

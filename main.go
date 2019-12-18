@@ -1,19 +1,19 @@
 package main
 
 import (
-	"time"
-	"github.com/robfig/cron"
-	"log"
-	"os"
-	"io/ioutil"
-	"strings"
 	"bufio"
-	"strconv"
-	"math"
 	"encoding/json"
+	"github.com/robfig/cron"
+	"io/ioutil"
+	"log"
+	"math"
+	"os"
 	"os/signal"
-	"syscall"
 	"runtime"
+	"strconv"
+	"strings"
+	"syscall"
+	"time"
 )
 
 const (
@@ -48,6 +48,7 @@ func runBilling() {
 	logger.Println("[INFO] Begin to runBilling", time.Now().Format("2006-01-02 15:04:05"))
 	task := new(Task)
 	task.PidCache = make(map[string][]BillingUsage)
+	task.PidUsageCache = make(map[string]BillingUsage)
 
 	// Get Usages by '.csv' file exported by TiSpark
 	task.ConstructUsageData()
@@ -89,6 +90,15 @@ func runBilling() {
 	}
 	// Sending data
 	logger.Println("[INFO] Finish runBilling", time.Now().Format("2006-01-02 15:04:05"))
+	// Start Billing Usage to Redis
+	logger.Println("[PLUGIN] Start Billing Usage", time.Now().Format("2006-01-02 15:04:05"))
+
+	// Sending Usage Group By Uid
+	setUidToRedis(task.PidUsageCache)
+	// Sending Usage Group By Bucket
+	task.ConstructBucketUsageData()
+	// Ended
+	logger.Println("[PLUGIN] Finish Billing Usage", time.Now().Format("2006-01-02 15:04:05"))
 }
 
 func Send(p Producer, data []byte) error {
@@ -96,8 +106,9 @@ func Send(p Producer, data []byte) error {
 }
 
 type Task struct {
-	BillingData BatchUsage
-	PidCache    map[string][]BillingUsage
+	BillingData   BatchUsage
+	PidCache      map[string][]BillingUsage
+	PidUsageCache map[string]BillingUsage
 }
 
 func (t *Task) ConstructCache(pid, usageType string, usageCount uint64) {
@@ -110,6 +121,7 @@ func (t *Task) ConstructCache(pid, usageType string, usageCount uint64) {
 	} else {
 		t.PidCache[pid] = []BillingUsage{usage}
 	}
+	t.PidUsageCache[pid] = usage
 }
 
 func (t *Task) ConstructUsageData() {
@@ -132,6 +144,31 @@ func (t *Task) ConstructUsageData() {
 			filePath := usageDataDir + string(os.PathSeparator) + fi.Name()
 			logger.Println("[TRACE] Read File:", filePath)
 			t.ConstructUsageDataByFile(filePath)
+			break
+		}
+	}
+}
+
+func (t *Task) ConstructBucketUsageData() {
+	hour := time.Now().Format(folderLayoutStr)
+	usageDataDir := conf.BucketUsageDataDir + string(os.PathSeparator) + hour
+	logger.Println("[PLUGIN] BucketusageDataDir:", usageDataDir)
+	execBash(conf.TisparkShellBucket, usageDataDir, conf.SparkHome)
+
+	// Find Usage files, Construct map
+	dir, err := ioutil.ReadDir(usageDataDir)
+	if err != nil {
+		logger.Println("[WARNING] Read BucketUsageDataDir error:", err)
+		return
+	}
+	for _, fi := range dir {
+		if fi.IsDir() {
+			continue
+		}
+		if strings.HasSuffix(fi.Name(), ".csv") {
+			filePath := usageDataDir + string(os.PathSeparator) + fi.Name()
+			logger.Println("[PLUGIN] Read File:", filePath)
+			t.ConstructBucketUsageDataByFile(filePath)
 			break
 		}
 	}
@@ -168,6 +205,43 @@ func (t *Task) ConstructUsageDataByFile(filePath string) {
 		t.ConstructCache(pid, usageType, usageCount)
 	}
 	logger.Println("[TRACE] Finish ConstructUsageDataByFile", time.Now().Format("2006-01-02 15:04:05"))
+}
+
+func (t *Task) ConstructBucketUsageDataByFile(filePath string) {
+	logger.Println("[PLUGIN] Begin to Construct Bucket Usage and set to redis", time.Now().Format("2006-01-02 15:04:05"))
+	f, err := os.Open(filePath)
+	if err != nil {
+		logger.Println("[WARNING] Read file", filePath, "error:", err)
+		return
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := sc.Text()
+
+		data := strings.Split(line, ",")
+		if len(data) < 3 {
+			continue
+		}
+		bucket := Bucket + data[0]
+		usageTypeIndex, err := strconv.Atoi(data[1])
+		if err != nil {
+			logger.Println("[WARNING] strconv.Atoi", data[1], "error:", err)
+			continue
+		}
+		usageType := StorageClassIndexMap[(StorageClass(usageTypeIndex))]
+		usageCount, err := strconv.ParseUint(data[2], 10, 64)
+		if err != nil {
+			logger.Println("[WARNING] strconv.ParseUint", data[2], "error:", err)
+			continue
+		}
+		usage := BillingUsage{
+			BillType: usageType,
+			Usage:    usageCount,
+		}
+		setToRedis(bucket, usage)
+	}
+	logger.Println("[PLUGIN] Finish set bucket usage to redis", time.Now().Format("2006-01-02 15:04:05"))
 }
 
 func (t *Task) ConstructTrafficData() {
