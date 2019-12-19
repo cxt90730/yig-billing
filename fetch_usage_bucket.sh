@@ -2,6 +2,7 @@
 
 path=$1
 SPARKHOME=$2
+find $(dirname "$path") -type d -mtime +7 -exec rm -rf {} \;
 
 exec $SPARKHOME/bin/spark-shell <<!EOF
 spark.sql("use yig")
@@ -10,3 +11,4 @@ val df2 = sql("select m.bucketname,m.storageclass, sum(mp.size) from multipartpa
 val df = df1.unionAll(df2).distinct().groupBy("bucketname","storageclass").sum("usage")
 df.coalesce(1).write.format("com.databricks.spark.csv").mode("overwrite").option("header", "false").save("$path")
 !EOF
+

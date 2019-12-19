@@ -5,7 +5,7 @@ import (
 	"io/ioutil"
 )
 
-const configPath = "/etc/yig/billing/billing.toml"
+const configPath = "/etc/yig/yig-billing.toml"
 
 type Config struct {
 	PrometheusUrl      string        `toml:"prometheus_url"`
@@ -21,6 +21,7 @@ type Config struct {
 	Producer           DummyProducer `toml:"producer"`
 	RedisUrl           string        `toml:"redis_url"`
 	RedisPassword      string        `toml:"redis_password"`
+	EnableUsageCache   bool          `toml:"enable_usage_cache"`
 }
 
 func readConfig() {
