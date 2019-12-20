@@ -45,7 +45,7 @@ var logger *log.Logger
 var conf Config
 
 const timeLayoutStr = "2006-01-02 15"
-const folderLayoutStr = "200601021504"
+const folderLayoutStr = "2006010215"
 
 func runBilling() {
 	wg := new(sync.WaitGroup)

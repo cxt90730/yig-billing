@@ -2,7 +2,6 @@
 
 path=$1
 SPARKHOME=$2
-find $(dirname "$path") -type d -mtime +7 -exec rm -rf {} \;
 
 exec $SPARKHOME/bin/spark-shell <<!EOF
 spark.sql("use yig")
