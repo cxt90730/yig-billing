@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/garyburd/redigo/redis"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -30,9 +31,11 @@ func newRedisConn(address, password string) *redis.Pool {
 	}
 }
 
-func setToRedis(wg *sync.WaitGroup, pool *redis.Pool, key string, value BillingUsage) {
+func setToRedis(wg *sync.WaitGroup, pool *redis.Pool, key string, usage BillingUsage) {
+	var value string
 	newKey := key
 	conn := pool.Get()
+	value = usage.BillType + ":" + strconv.FormatUint(usage.Usage, 10)
 	_, err := conn.Do("SET", newKey, value)
 	if err != nil {
 		logger.Println("[WARNING] Redis set error:", err)
@@ -51,4 +54,3 @@ func setUidToRedis(cache map[string]BillingUsage) {
 	}
 	wg.Wait()
 }
-
