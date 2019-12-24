@@ -1,24 +1,27 @@
 package main
 
 import (
-	"time"
-	"github.com/robfig/cron"
-	"log"
-	"os"
-	"io/ioutil"
-	"strings"
 	"bufio"
-	"strconv"
-	"math"
 	"encoding/json"
+	"github.com/robfig/cron"
+	"io/ioutil"
+	"log"
+	"math"
+	"os"
 	"os/signal"
-	"syscall"
 	"runtime"
+	"strconv"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
 )
 
 const (
 	BillingTypeAPI     = "API"
 	BillingTypeTraffic = "TRAFFIC"
+	LoggerBucketInfo   = "PLUGIN LOG"
+	LoggerBuckteError  = "WARRING BUT NOT IMPORTANT"
 )
 
 type BatchUsage struct {
@@ -45,16 +48,23 @@ const timeLayoutStr = "2006-01-02 15"
 const folderLayoutStr = "2006010215"
 
 func runBilling() {
+	wg := new(sync.WaitGroup)
 	logger.Println("[INFO] Begin to runBilling", time.Now().Format("2006-01-02 15:04:05"))
 	task := new(Task)
 	task.PidCache = make(map[string][]BillingUsage)
+	task.RedisUsageCache = make(map[string]BillingUsage)
 
 	// Get Usages by '.csv' file exported by TiSpark
-	task.ConstructUsageData()
+	task.ConstructUsageData(conf.TisparkShell)
 	// Get Traffic From Prometheus
 	task.ConstructTrafficData()
 	// Get API Count From Prometheus
 	task.ConstructAPIData()
+	// If Enable Usage Cache Is On, Cache Usage to Redis
+	if conf.EnableUsageCache {
+		wg.Add(1)
+		go task.cacheUsageToRedis(wg)
+	}
 
 	// Constuct BillingData
 	task.BillingData.RegionId = conf.RegionId
@@ -89,6 +99,7 @@ func runBilling() {
 	}
 	// Sending data
 	logger.Println("[INFO] Finish runBilling", time.Now().Format("2006-01-02 15:04:05"))
+	wg.Wait()
 }
 
 func Send(p Producer, data []byte) error {
@@ -96,8 +107,20 @@ func Send(p Producer, data []byte) error {
 }
 
 type Task struct {
-	BillingData BatchUsage
-	PidCache    map[string][]BillingUsage
+	BillingData     BatchUsage
+	PidCache        map[string][]BillingUsage
+	RedisUsageCache map[string]BillingUsage
+}
+
+func (t *Task) cacheUsageToRedis(wg *sync.WaitGroup) {
+	t.ConstructUsageData(conf.TisparkShellBucket)
+	// Start Billing Usage to Redis
+	logger.Println("[PLUGIN] Start Calculate Usage", time.Now().Format("2006-01-02 15:04:05"))
+	// SetToRedis
+	setUidToRedis(t.RedisUsageCache)
+	// Ended
+	logger.Println("[PLUGIN] Finish Calculate usage", time.Now().Format("2006-01-02 15:04:05"))
+	wg.Done()
 }
 
 func (t *Task) ConstructCache(pid, usageType string, usageCount uint64) {
@@ -112,11 +135,20 @@ func (t *Task) ConstructCache(pid, usageType string, usageCount uint64) {
 	}
 }
 
-func (t *Task) ConstructUsageData() {
+func (t *Task) ConstructUsageData(path string) {
+	var loggerUsageInfo, loggerUsageError string
+	key := path
+	if key == conf.TisparkShellBucket {
+		loggerUsageInfo = LoggerBucketInfo
+		loggerUsageError = LoggerBuckteError
+	} else {
+		loggerUsageInfo = ""
+		loggerUsageError = ""
+	}
 	hour := time.Now().Format(folderLayoutStr)
 	usageDataDir := conf.UsageDataDir + string(os.PathSeparator) + hour
-	logger.Println("[TRACE] usageDataDir:", usageDataDir)
-	execBash(conf.TisparkShell, usageDataDir, conf.SparkHome)
+	logger.Println(loggerUsageInfo, "[TRACE] usageDataDir:", usageDataDir)
+	execBash(path, usageDataDir, conf.SparkHome)
 
 	// Find Usage files, Construct map
 	dir, err := ioutil.ReadDir(usageDataDir)
@@ -130,15 +162,15 @@ func (t *Task) ConstructUsageData() {
 		}
 		if strings.HasSuffix(fi.Name(), ".csv") {
 			filePath := usageDataDir + string(os.PathSeparator) + fi.Name()
-			logger.Println("[TRACE] Read File:", filePath)
-			t.ConstructUsageDataByFile(filePath)
+			logger.Println(loggerUsageInfo, "[TRACE] Read File:", filePath)
+			t.ConstructUsageDataByFile(loggerUsageInfo, loggerUsageError, key, filePath)
 			break
 		}
 	}
 }
 
-func (t *Task) ConstructUsageDataByFile(filePath string) {
-	logger.Println("[TRACE] Begin to ConstructUsageDataByFile", time.Now().Format("2006-01-02 15:04:05"))
+func (t *Task) ConstructUsageDataByFile(loggerUsageInfo, loggerUsageError, key, filePath string) {
+	logger.Println(loggerUsageInfo, "[TRACE] Begin to ConstructUsageDataByFile", time.Now().Format("2006-01-02 15:04:05"))
 	f, err := os.Open(filePath)
 	if err != nil {
 		logger.Println("[ERROR] Read file", filePath, "error:", err)
@@ -156,18 +188,24 @@ func (t *Task) ConstructUsageDataByFile(filePath string) {
 		pid := data[0]
 		usageTypeIndex, err := strconv.Atoi(data[1])
 		if err != nil {
-			logger.Println("[ERROR] strconv.Atoi", data[1], "error:", err)
+			logger.Println(loggerUsageError, "[ERROR] strconv.Atoi", data[1], "error:", err)
 			continue
 		}
 		usageType := StorageClassIndexMap[(StorageClass(usageTypeIndex))]
 		usageCount, err := strconv.ParseUint(data[2], 10, 64)
 		if err != nil {
-			logger.Println("[ERROR] strconv.ParseUint", data[2], "error:", err)
+			logger.Println(loggerUsageError, "[ERROR] strconv.ParseUint", data[2], "error:", err)
 			continue
 		}
-		t.ConstructCache(pid, usageType, usageCount)
+		if key != conf.TisparkShellBucket {
+			t.ConstructCache(pid, usageType, usageCount)
+			pid = PidUsagePrefix + pid
+		} else {
+			pid = BucketUsagePrefix + pid
+		}
+		t.RedisUsageCache[pid] = BillingUsage{BillType: usageType, Usage: usageCount}
 	}
-	logger.Println("[TRACE] Finish ConstructUsageDataByFile", time.Now().Format("2006-01-02 15:04:05"))
+	logger.Println(loggerUsageInfo, "[TRACE] Finish ConstructUsageDataByFile", time.Now().Format("2006-01-02 15:04:05"))
 }
 
 func (t *Task) ConstructTrafficData() {

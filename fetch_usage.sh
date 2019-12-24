@@ -10,3 +10,4 @@ val df2 = sql("select m.ownerid,m.storageclass, sum(mp.size) from multipartpart 
 val df = df1.unionAll(df2).distinct().groupBy("ownerid","storageclass").sum("usage")
 df.coalesce(1).write.format("com.databricks.spark.csv").mode("overwrite").option("header", "false").save("$path")
 !EOF
+
