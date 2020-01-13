@@ -1,18 +1,18 @@
-package main
+package helper
 
 import (
-	"net/url"
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/base64"
-	"strings"
-	"sort"
+	"errors"
 	"hash"
 	"io"
-	"bytes"
 	"net/http"
-	"errors"
+	"net/url"
+	"sort"
 	"strconv"
+	"strings"
 )
 
 type QuerySorter struct {
@@ -55,11 +55,11 @@ func GetSignature(httpMethod, requestUrl, secret string) string {
 		canonicalizedQueryString += qs.Keys[i] + "=" + qs.Vals[i] + "&"
 	}
 	canonicalizedQueryString = canonicalizedQueryString[:len(canonicalizedQueryString)-1]
-	logger.Println("[TRACE] canonicalizedQueryString:", canonicalizedQueryString)
+	Logger.Println("[TRACE] canonicalizedQueryString:", canonicalizedQueryString)
 	stringToSign := httpMethod + "&" + percentEncode("/") + "&" +
 		percentEncode(canonicalizedQueryString)
-	logger.Println("[TRACE] StringToSign:", stringToSign)
-	logger.Println("[TRACE] SecretKey:", secret)
+	Logger.Println("[TRACE] StringToSign:", stringToSign)
+	Logger.Println("[TRACE] SecretKey:", secret)
 	h := hmac.New(func() hash.Hash { return sha1.New() }, []byte(secret+"&"))
 	io.WriteString(h, stringToSign)
 	signedStr := url.QueryEscape(base64.StdEncoding.EncodeToString(h.Sum(nil)))
@@ -114,7 +114,7 @@ type DummyProducer struct {
 func (d DummyProducer) Send(data []byte) error {
 	receiverUrl := d.Url + d.Path + "?AccessKeyId=" + d.AccessKey
 	receiverUrl += "&Signature=" + GetSignature("POST", receiverUrl, d.SecretKey)
-	logger.Println("[INFO] Post data to", receiverUrl)
+	Logger.Println("[INFO] Post data to", receiverUrl)
 
 	request, _ := http.NewRequest("POST", receiverUrl, bytes.NewReader(data))
 	request.Header.Set("Content-Type", "application/json;charset=UTF-8")

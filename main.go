@@ -1,323 +1,43 @@
 package main
 
 import (
-	"bufio"
-	"encoding/json"
-	"github.com/robfig/cron"
-	"io/ioutil"
+	"github.com/journeymidnight/yig-billing/billing"
+	"github.com/journeymidnight/yig-billing/db"
+	"github.com/journeymidnight/yig-billing/helper"
+	"github.com/journeymidnight/yig-billing/messagebus"
+	"github.com/journeymidnight/yig-billing/redis"
 	"log"
-	"math"
 	"os"
 	"os/signal"
 	"runtime"
-	"strconv"
-	"strings"
-	"sync"
 	"syscall"
-	"time"
 )
-
-const (
-	BillingTypeAPI     = "API"
-	BillingTypeTraffic = "TRAFFIC"
-	LoggerBucketInfo   = "PLUGIN LOG"
-	LoggerBuckteError  = "WARRING BUT NOT IMPORTANT"
-)
-
-type BatchUsage struct {
-	RegionId  string      `json:"regionId"`
-	BeginTime string      `json:"beginTime"`
-	EndTime   string      `json:"endTime"`
-	Data      []UserUsage `json:"data"`
-}
-
-type UserUsage struct {
-	ProjectId string         `json:"projectId"`
-	Usages    []BillingUsage `json:"usages"`
-}
-
-type BillingUsage struct {
-	BillType string `json:"billType"`
-	Usage    uint64 `json:"usage"`
-}
-
-var logger *log.Logger
-var conf Config
-
-const timeLayoutStr = "2006-01-02 15"
-const folderLayoutStr = "2006010215"
-
-func runBilling() {
-	wg := new(sync.WaitGroup)
-	logger.Println("[INFO] Begin to runBilling", time.Now().Format("2006-01-02 15:04:05"))
-	task := new(Task)
-	task.PidCache = make(map[string][]BillingUsage)
-	task.RedisUsageCache = make(map[string]BillingUsage)
-
-	// Get Usages by '.csv' file exported by TiSpark
-	task.ConstructUsageData(conf.TisparkShell)
-	// Get Traffic From Prometheus
-	task.ConstructTrafficData()
-	// Get API Count From Prometheus
-	task.ConstructAPIData()
-	// If Enable Usage Cache Is On, Cache Usage to Redis
-	if conf.EnableUsageCache {
-		wg.Add(1)
-		go task.cacheUsageToRedis(wg)
-	}
-
-	// Constuct BillingData
-	task.BillingData.RegionId = conf.RegionId
-	hd, _ := time.ParseDuration("-1h")
-	task.BillingData.BeginTime = time.Now().Add(hd).Format(timeLayoutStr) + ":00:00"
-	task.BillingData.EndTime = time.Now().Format(timeLayoutStr) + ":00:00"
-	for pid, u := range task.PidCache {
-		// Ignore test data
-		if pid == "-" || pid == "hehehehe" {
-			continue
-		}
-		userUsage := UserUsage{
-			ProjectId: pid,
-			Usages:    u,
-		}
-		task.BillingData.Data = append(task.BillingData.Data, userUsage)
-	}
-
-	sendingData, err := json.Marshal(task.BillingData)
-	if err != nil {
-		logger.Println("[ERROR] json.Marshal", task.BillingData, "error:", err)
-		return
-	}
-
-	logger.Println("[TRACE] Sending data:", string(sendingData))
-
-	// Implement
-	err = Send(conf.Producer, sendingData)
-	if err != nil {
-		logger.Println("[ERROR] Sending data error:", err)
-		return
-	}
-	// Sending data
-	logger.Println("[INFO] Finish runBilling", time.Now().Format("2006-01-02 15:04:05"))
-	wg.Wait()
-}
-
-func Send(p Producer, data []byte) error {
-	return p.Send(data)
-}
-
-type Task struct {
-	BillingData     BatchUsage
-	PidCache        map[string][]BillingUsage
-	RedisUsageCache map[string]BillingUsage
-}
-
-func (t *Task) cacheUsageToRedis(wg *sync.WaitGroup) {
-	t.ConstructUsageData(conf.TisparkShellBucket)
-	// Start Billing Usage to Redis
-	logger.Println("[PLUGIN] Start Calculate Usage", time.Now().Format("2006-01-02 15:04:05"))
-	// SetToRedis
-	setUidToRedis(t.RedisUsageCache)
-	// Ended
-	logger.Println("[PLUGIN] Finish Calculate usage", time.Now().Format("2006-01-02 15:04:05"))
-	wg.Done()
-}
-
-func (t *Task) ConstructCache(pid, usageType string, usageCount uint64) {
-	usage := BillingUsage{
-		BillType: usageType,
-		Usage:    usageCount,
-	}
-	if _, ok := t.PidCache[pid]; ok {
-		t.PidCache[pid] = append(t.PidCache[pid], usage)
-	} else {
-		t.PidCache[pid] = []BillingUsage{usage}
-	}
-}
-
-func (t *Task) ConstructUsageData(path string) {
-	var loggerUsageInfo, loggerUsageError string
-	key := path
-	if key == conf.TisparkShellBucket {
-		loggerUsageInfo = LoggerBucketInfo
-		loggerUsageError = LoggerBuckteError
-	} else {
-		loggerUsageInfo = ""
-		loggerUsageError = ""
-	}
-	hour := time.Now().Format(folderLayoutStr)
-	usageDataDir := conf.UsageDataDir + string(os.PathSeparator) + hour
-	logger.Println(loggerUsageInfo, "[TRACE] usageDataDir:", usageDataDir)
-	execBash(path, usageDataDir, conf.SparkHome)
-
-	// Find Usage files, Construct map
-	dir, err := ioutil.ReadDir(usageDataDir)
-	if err != nil {
-		logger.Println("[ERROR] Read UsageDataDir error:", err)
-		return
-	}
-	for _, fi := range dir {
-		if fi.IsDir() {
-			continue
-		}
-		if strings.HasSuffix(fi.Name(), ".csv") {
-			filePath := usageDataDir + string(os.PathSeparator) + fi.Name()
-			logger.Println(loggerUsageInfo, "[TRACE] Read File:", filePath)
-			t.ConstructUsageDataByFile(loggerUsageInfo, loggerUsageError, key, filePath)
-			break
-		}
-	}
-}
-
-func (t *Task) ConstructUsageDataByFile(loggerUsageInfo, loggerUsageError, key, filePath string) {
-	logger.Println(loggerUsageInfo, "[TRACE] Begin to ConstructUsageDataByFile", time.Now().Format("2006-01-02 15:04:05"))
-	f, err := os.Open(filePath)
-	if err != nil {
-		logger.Println("[ERROR] Read file", filePath, "error:", err)
-		return
-	}
-	defer f.Close()
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		line := sc.Text()
-
-		data := strings.Split(line, ",")
-		if len(data) < 3 {
-			continue
-		}
-		pid := data[0]
-		usageTypeIndex, err := strconv.Atoi(data[1])
-		if err != nil {
-			logger.Println(loggerUsageError, "[ERROR] strconv.Atoi", data[1], "error:", err)
-			continue
-		}
-		usageType := StorageClassIndexMap[(StorageClass(usageTypeIndex))]
-		usageCount, err := strconv.ParseUint(data[2], 10, 64)
-		if err != nil {
-			logger.Println(loggerUsageError, "[ERROR] strconv.ParseUint", data[2], "error:", err)
-			continue
-		}
-		if key != conf.TisparkShellBucket {
-			t.ConstructCache(pid, usageType, usageCount)
-			pid = PidUsagePrefix + pid
-		} else {
-			pid = BucketUsagePrefix + pid
-		}
-		t.RedisUsageCache[pid] = BillingUsage{BillType: usageType, Usage: usageCount}
-	}
-	logger.Println(loggerUsageInfo, "[TRACE] Finish ConstructUsageDataByFile", time.Now().Format("2006-01-02 15:04:05"))
-}
-
-func (t *Task) ConstructTrafficData() {
-	logger.Println("[TRACE] Begin to ConstructTrafficData", time.Now().Format("2006-01-02 15:04:05"))
-	usageType := BillingTypeTraffic
-	// `sum(increase(yig_http_response_size_bytes{is_private_subnet="false", method="GET", cdn_request="false"}[1h]))by(bucket_owner)`
-	queryString := "sum(increase(yig_http_response_size_bytes{is_private_subnet=%22false%22,method=%22GET%22,cdn_request=%22false%22}[1h]))by(bucket_owner)"
-	res := getDataFromPrometheus(queryString)
-	if res == nil {
-		logger.Println("[ERROR] Get Empty TrafficData")
-		return
-	}
-	for _, v := range res.Data.Result {
-		var pid, usageString string
-		pidMap, ok := v.Metric.(map[string]interface{})
-		if !ok {
-			continue
-		} else {
-			pid = pidMap["bucket_owner"].(string)
-		}
-		if len(v.Value) < 2 {
-			continue
-		}
-		// float string
-		usageString = v.Value[1].(string)
-		if usageString == "0" {
-			continue
-		}
-		usageFloat, err := strconv.ParseFloat(usageString, 64)
-		if err != nil {
-			logger.Println("[ERROR] strconv.ParseFloat", usageString, "err:", err)
-			continue
-		}
-		t.ConstructCache(pid, usageType, uint64(math.Ceil(usageFloat)))
-	}
-	logger.Println("[TRACE] Finish ConstructTrafficData", time.Now().Format("2006-01-02 15:04:05"))
-
-}
-
-func (t *Task) ConstructAPIData() {
-	logger.Println("[TRACE] Begin to ConstructAPIData", time.Now().Format("2006-01-02 15:04:05"))
-
-	usageType := BillingTypeAPI
-	queryString := `sum(increase(yig_http_response_count_total[1h]))by(bucket_owner)`
-	res := getDataFromPrometheus(queryString)
-	if res == nil {
-		logger.Println("[ERROR] Get Empty TrafficData")
-		return
-	}
-	for _, v := range res.Data.Result {
-		var pid, usageString string
-		pidMap, ok := v.Metric.(map[string]interface{})
-		if !ok {
-			continue
-		} else {
-			pid = pidMap["bucket_owner"].(string)
-		}
-		if len(v.Value) < 2 {
-			continue
-		}
-		// float string
-		usageString = v.Value[1].(string)
-		if usageString == "0" {
-			continue
-		}
-		usageFloat, err := strconv.ParseFloat(usageString, 64)
-		if err != nil {
-			logger.Println("[ERROR] strconv.ParseFloat", usageString, "err:", err)
-			continue
-		}
-		t.ConstructCache(pid, usageType, uint64(math.Ceil(usageFloat)))
-	}
-	logger.Println("[TRACE] Finish ConstructAPIData", time.Now().Format("2006-01-02 15:04:05"))
-}
 
 func main() {
-	readConfig()
-	f, err := os.OpenFile(conf.LogPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		panic("Failed to open log file " + conf.LogPath)
-	}
-	defer f.Close()
-	logger = log.New(f, "[yig]", log.LstdFlags)
+	// Initialization modules
+	initModules()
 
-	logger.Println("[INFO] Start Yig Billing...")
-	logger.Printf("[TRACE] Config:\n %+v", conf)
+	// Start billing server
+	go billing.Billing()
 
-	if !conf.EnableCron {
-		runBilling()
-	} else {
-		c := cron.New()
-		c.AddFunc(conf.Spec, runBilling)
-		c.Start()
-		signal.Ignore()
-		signalQueue := make(chan os.Signal)
-		signal.Notify(signalQueue, syscall.SIGINT, syscall.SIGTERM,
-			syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGUSR1)
-		for {
-			s := <-signalQueue
-			switch s {
-			case syscall.SIGHUP:
-				log.Println("[WARNING] Recieve signal SIGHUP")
-				// reload config file
-				readConfig()
-			case syscall.SIGUSR1:
-				log.Println("[WARNING] Recieve signal SIGUSR1")
-				go DumpStacks()
-			default:
-				log.Println("[WARNING] Recieve signal:", s.String())
-				log.Println("[INFO] Stop yig billing...")
-				return
-			}
+	signal.Ignore()
+	signalQueue := make(chan os.Signal)
+	signal.Notify(signalQueue, syscall.SIGINT, syscall.SIGTERM,
+		syscall.SIGQUIT, syscall.SIGHUP, syscall.SIGUSR1)
+	for {
+		s := <-signalQueue
+		switch s {
+		case syscall.SIGHUP:
+			log.Println("[WARNING] Recieve signal SIGHUP")
+			// reload units
+			initModules()
+		case syscall.SIGUSR1:
+			log.Println("[WARNING] Recieve signal SIGUSR1")
+			go DumpStacks()
+		default:
+			log.Println("[WARNING] Recieve signal:", s.String())
+			log.Println("[INFO] Stop yig billing...")
+			return
 		}
 	}
 }
@@ -325,5 +45,17 @@ func main() {
 func DumpStacks() {
 	buf := make([]byte, 1<<16)
 	stacklen := runtime.Stack(buf, true)
-	logger.Printf("=== received SIGQUIT ===\n*** goroutine dump...\n%s\n*** end\n", buf[:stacklen])
+	helper.Logger.Printf("=== received SIGQUIT ===\n*** goroutine dump...\n%s\n*** end\n", buf[:stacklen])
+}
+
+func initModules() {
+	// Load configuration files and logs
+	helper.ReadConfig()
+	helper.NewLogger()
+	// Initialize Redis config
+	redis.NewRedisConn()
+	// Initialize kafka consumer
+	messagebus.NewConsumer()
+	// Initialize database
+	db.NewTIdbClient()
 }

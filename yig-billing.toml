@@ -3,14 +3,26 @@ region_id = "region_id"
 usage_data_dir = "/tmp/usage"
 bucket_usage_data_dir = "/tmp/usage_bucket"
 log_path = "/var/log/yig/billing.log"
-enable_cron=true
-spec = "@hourly"
+
+enable_post_billing_cron = true
+post_billing_spec = "@hourly"
 spark_home = "/home/tidb/data/deploy/spark"
 tispark_shell = "/etc/yig/fetch_usage.sh"
 tispark_shell_bucket = "/etc/yig/fetch_usage_bucket.sh"
+
 enable_usage_cache = true
 redis_url = "10.5.0.8:6379"
 redis_password = "hehehehe"
+
+clean_up_database_spec = "@hourly"
+tidb_connection = "root@tcp(10.5.0.17:4000)/billing"
+db_max_idle_conns = 1024
+db_max_open_conns = 10
+db_conn_max_life_seconds = 300
+
+kafka_server = "kafka:29092"
+kafka_group_id = "myGroup"
+kafka_topic = "testTopic2"
 
 [producer]
 url="url"
