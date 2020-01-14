@@ -55,6 +55,7 @@ func postBilling() {
 	task.PidCache = make(map[string][]BillingUsage)
 	task.RedisUsageCache = make(map[string][]BillingUsage)
 
+	startPostBillingTime := time.Now().UnixNano() / 1e6
 	// Get Usages by Redis which other storage class object had been deleted
 	task.ConstructUsageOtherStorageClassBeenDeletedData()
 	// Get Usages by '.csv' file exported by TiSpark
@@ -103,7 +104,9 @@ func postBilling() {
 		return
 	}
 	// Sending data
-	Logger.Println("[INFO] Finish runBilling", time.Now().Format("2006-01-02 15:04:05"))
+	endPostBillingTime := time.Now().UnixNano() / 1e6
+	consumeTime := endPostBillingTime - startPostBillingTime
+	Logger.Println("[INFO] Finish runBilling", time.Now().Format("2006-01-02 15:04:05"), "consumed time:", consumeTime, "ms")
 	wg.Wait()
 
 }
