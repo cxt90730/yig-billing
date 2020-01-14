@@ -24,11 +24,6 @@ type Config struct {
 	RedisUrl              string        `toml:"redis_url"`
 	RedisPassword         string        `toml:"redis_password"`
 	EnableUsageCache      bool          `toml:"enable_usage_cache"`
-	CleanUpDatabaseSpec   string        `toml:"clean_up_database_spec"`
-	TidbConnection        string        `toml:"tidb_connection"`
-	DbMaxIdleConns        int           `toml:"db_max_idle_conns"`
-	DbMaxOpenConns        int           `toml:"db_max_open_conns"`
-	DbConnMaxLifeSeconds  int           `toml:"db_conn_max_life_seconds"`
 	KafkaServer           string        `toml:"kafka_server"`
 	KafkaGroupId          string        `toml:"kafka_group_id"`
 	KafkaTopic            string        `toml:"kafka_topic"`

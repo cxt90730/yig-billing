@@ -14,12 +14,6 @@ enable_usage_cache = true
 redis_url = "10.5.0.8:6379"
 redis_password = "hehehehe"
 
-clean_up_database_spec = "@hourly"
-tidb_connection = "root@tcp(10.5.0.17:4000)/billing"
-db_max_idle_conns = 1024
-db_max_open_conns = 10
-db_conn_max_life_seconds = 300
-
 kafka_server = "kafka:29092"
 kafka_group_id = "myGroup"
 kafka_topic = "testTopic2"

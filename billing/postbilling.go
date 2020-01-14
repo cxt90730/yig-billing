@@ -42,6 +42,10 @@ type BillingUsage struct {
 	Usage    uint64 `json:"usage"`
 }
 
+type BillingUsageCache struct {
+	Cache map[string]uint64
+}
+
 const folderLayoutStr = "2006010215"
 
 func postBilling() {
@@ -51,6 +55,8 @@ func postBilling() {
 	task.PidCache = make(map[string][]BillingUsage)
 	task.RedisUsageCache = make(map[string]BillingUsage)
 
+	// Get Usages by Redis which other storage class object had been deleted
+	task.ConstructUsageOtherStorageClassBeenDeletedData()
 	// Get Usages by '.csv' file exported by TiSpark
 	task.ConstructUsageData(Conf.TisparkShell)
 	// Get Traffic From Prometheus
@@ -107,9 +113,10 @@ func Send(p Producer, data []byte) error {
 }
 
 type Task struct {
-	BillingData     BatchUsage
-	PidCache        map[string][]BillingUsage
-	RedisUsageCache map[string]BillingUsage
+	BillingData                   BatchUsage
+	OtherStorageClassDeletedCache map[string]BillingUsageCache
+	PidCache                      map[string][]BillingUsage
+	RedisUsageCache               map[string]BillingUsage
 }
 
 func (t *Task) cacheUsageToRedis(wg *sync.WaitGroup) {
@@ -121,7 +128,12 @@ func (t *Task) cacheUsageToRedis(wg *sync.WaitGroup) {
 	for k, v := range t.RedisUsageCache {
 		message := new(redis.MessageForRedis)
 		message.Key = k
-		message.Value = v.BillType + ":" + strconv.FormatUint(v.Usage, 10)
+		value := redis.RedisConn.GetFromRedis(k)
+		if len(value) > 0 {
+			message.Value = value + v.BillType + ":" + strconv.FormatUint(v.Usage, 10) + ","
+		} else {
+			message.Value = v.BillType + ":" + strconv.FormatUint(v.Usage, 10) + ","
+		}
 		redis.RedisConn.SetToRedis(*message)
 		messages = append(messages, *message)
 	}
@@ -132,6 +144,13 @@ func (t *Task) cacheUsageToRedis(wg *sync.WaitGroup) {
 }
 
 func (t *Task) ConstructCache(pid, usageType string, usageCount uint64) {
+	if cache := t.OtherStorageClassDeletedCache[pid].Cache; cache != nil {
+		for k, v := range cache {
+			if k == usageType {
+				usageCount = usageCount + v
+			}
+		}
+	}
 	usage := BillingUsage{
 		BillType: usageType,
 		Usage:    usageCount,
@@ -141,6 +160,45 @@ func (t *Task) ConstructCache(pid, usageType string, usageCount uint64) {
 	} else {
 		t.PidCache[pid] = []BillingUsage{usage}
 	}
+}
+
+func (t *Task) ConstructUsageOtherStorageClassBeenDeletedData() {
+	t.OtherStorageClassDeletedCache = make(map[string]BillingUsageCache)
+	allKeys := redis.RedisConn.GetUserAllKeys(redis.BillingUsagePrefix + "*")
+	if len(allKeys) > 0 {
+		for _, key := range allKeys {
+			keyMembers := strings.Split(key, ":")
+			pid := keyMembers[1]
+			storageClass := keyMembers[2]
+			usage := redis.RedisConn.GetFromRedis(key)
+			if usage != "" {
+				uintUsage, err := strconv.ParseUint(usage, 10, 64)
+				if err != nil {
+					Logger.Println("[ERROR] strconv.ParseInt with UsageOtherStorageClassBeenDeleted", usage, "error:", err)
+				}
+				if t.OtherStorageClassDeletedCache[pid].Cache == nil {
+					billingCache := new(BillingUsageCache)
+					cache := make(map[string]uint64)
+					cache[storageClass] = uintUsage
+					billingCache.Cache = cache
+					t.OtherStorageClassDeletedCache[pid] = *billingCache
+				} else {
+					isUsageBeenCache := false
+					for k, _ := range t.OtherStorageClassDeletedCache[pid].Cache {
+						if k == storageClass {
+							t.OtherStorageClassDeletedCache[pid].Cache[storageClass] = t.OtherStorageClassDeletedCache[pid].Cache[storageClass] + uintUsage
+							isUsageBeenCache = true
+						}
+					}
+					if !isUsageBeenCache {
+						t.OtherStorageClassDeletedCache[pid].Cache[storageClass] = uintUsage
+					}
+				}
+			}
+		}
+	}
+	Logger.Println("[MESSAGE] ConstructUsageOtherStorageClassBeenDeletedData return is:", t.OtherStorageClassDeletedCache)
+	Logger.Println("[TRACE] Finish ConstructUsageOtherStorageClassBeenDeletedData", time.Now().Format("2006-01-02 15:04:05"))
 }
 
 func (t *Task) ConstructUsageData(path string) {
@@ -200,12 +258,14 @@ func (t *Task) ConstructUsageDataByFile(loggerUsageInfo, loggerUsageError, key, 
 			continue
 		}
 		usageType := StorageClassIndexMap[(StorageClass(usageTypeIndex))]
-		usageCount, err := strconv.ParseUint(data[2], 10, 64)
+		usageCountFlout, err := strconv.ParseFloat(data[2], 64)
 		if err != nil {
-			Logger.Println(loggerUsageError, "[ERROR] strconv.ParseUint", data[2], "error:", err)
+			Logger.Println(loggerUsageError, "[ERROR] strconv.ParseFloat", data[2], "error:", err)
 			continue
 		}
+		usageCount := Wrap(usageCountFlout, 1)
 		if key != Conf.TisparkShellBucket {
+
 			t.ConstructCache(pid, usageType, usageCount)
 			pid = redis.PidUsagePrefix + pid
 		} else {
@@ -214,6 +274,10 @@ func (t *Task) ConstructUsageDataByFile(loggerUsageInfo, loggerUsageError, key, 
 		t.RedisUsageCache[pid] = BillingUsage{BillType: usageType, Usage: usageCount}
 	}
 	Logger.Println(loggerUsageInfo, "[TRACE] Finish ConstructUsageDataByFile", time.Now().Format("2006-01-02 15:04:05"))
+}
+
+func Wrap(num float64, retain int) uint64 {
+	return uint64(num * math.Pow10(retain))
 }
 
 func (t *Task) ConstructTrafficData() {

@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/journeymidnight/yig-billing/billing"
-	"github.com/journeymidnight/yig-billing/db"
 	"github.com/journeymidnight/yig-billing/helper"
 	"github.com/journeymidnight/yig-billing/messagebus"
 	"github.com/journeymidnight/yig-billing/redis"
@@ -56,6 +55,4 @@ func initModules() {
 	redis.NewRedisConn()
 	// Initialize kafka consumer
 	messagebus.NewConsumer()
-	// Initialize database
-	db.NewTIdbClient()
 }

@@ -13,6 +13,5 @@ func Billing() {
 		c.AddFunc(helper.Conf.PostBillingSpec, postBilling)
 	}
 	collectMessage()
-	c.AddFunc(helper.Conf.CleanUpDatabaseSpec, cleanUpExpiredObjects)
 	c.Start()
 }
