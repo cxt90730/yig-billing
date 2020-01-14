@@ -56,8 +56,8 @@ func postBilling() {
 	task.RedisUsageCache = make(map[string][]BillingUsage)
 
 	startPostBillingTime := time.Now().UnixNano() / 1e6
-	// Get Usages by Redis which other storage class object had been deleted
-	task.ConstructUsageOtherStorageClassBeenDeletedData()
+	// Get Usages by Redis which Standard_IA object had been deleted
+	task.ConstructIADeletedUsage()
 	// Get Usages by '.csv' file exported by TiSpark
 	task.ConstructUsageData(Conf.TisparkShell)
 	// Get Traffic From Prometheus
@@ -123,6 +123,7 @@ type Task struct {
 }
 
 func (t *Task) cacheUsageToRedis(wg *sync.WaitGroup) {
+	var messages []redis.MessageForRedis
 	t.ConstructUsageData(Conf.TisparkShellBucket)
 	// Start Billing Usage to Redis
 	Logger.Println("[PLUGIN] Start Calculate Usage", time.Now().Format("2006-01-02 15:04:05"))
@@ -138,8 +139,10 @@ func (t *Task) cacheUsageToRedis(wg *sync.WaitGroup) {
 			}
 		}
 		redis.RedisConn.SetToRedis(*message)
+		messages = append(messages, *message)
 	}
 	// Ended
+	Logger.Println("[PLUGIN] Calculate usage is:", messages)
 	Logger.Println("[PLUGIN] Finish Calculate usage", time.Now().Format("2006-01-02 15:04:05"))
 	wg.Done()
 }
@@ -163,7 +166,7 @@ func (t *Task) ConstructCache(pid, usageType string, usageCount uint64) {
 	}
 }
 
-func (t *Task) ConstructUsageOtherStorageClassBeenDeletedData() {
+func (t *Task) ConstructIADeletedUsage() {
 	t.OtherStorageClassDeletedCache = make(map[string]BillingUsageCache)
 	allKeys := redis.RedisConn.GetUserAllKeys(redis.BillingUsagePrefix + "*")
 	if len(allKeys) > 0 {
@@ -175,7 +178,7 @@ func (t *Task) ConstructUsageOtherStorageClassBeenDeletedData() {
 			if usage != "" {
 				uintUsage, err := strconv.ParseUint(usage, 10, 64)
 				if err != nil {
-					Logger.Println("[ERROR] strconv.ParseInt with UsageOtherStorageClassBeenDeleted", usage, "error:", err)
+					Logger.Println("[ERROR] strconv.ParseInt with ConstructIADeletedUsage", usage, "error:", err)
 				}
 				if t.OtherStorageClassDeletedCache[pid].Cache == nil {
 					billingCache := new(BillingUsageCache)
@@ -198,8 +201,8 @@ func (t *Task) ConstructUsageOtherStorageClassBeenDeletedData() {
 			}
 		}
 	}
-	Logger.Println("[MESSAGE] ConstructUsageOtherStorageClassBeenDeletedData return is:", t.OtherStorageClassDeletedCache)
-	Logger.Println("[TRACE] Finish ConstructUsageOtherStorageClassBeenDeletedData", time.Now().Format("2006-01-02 15:04:05"))
+	Logger.Println("[MESSAGE] ConstructIADeletedUsage return is:", t.OtherStorageClassDeletedCache)
+	Logger.Println("[TRACE] Finish ConstructIADeletedUsage", time.Now().Format("2006-01-02 15:04:05"))
 }
 
 func (t *Task) ConstructUsageData(path string) {
