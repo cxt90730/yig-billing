@@ -57,12 +57,12 @@ func delDeleteObject(msg messagebus.ConsumerMessage) {
 	objectSize := info[messagebus.ObjectSize]
 	redisMsg := new(redis.MessageForRedis)
 	redisMsg.Key = redis.BillingUsagePrefix + projectId + UNDERLINE + storageClass + UNDERLINE + bucketName + UNDERLINE + objectName
-	redisMsg.Value = getCountSize(objectSize)
+	redisMsg.Value = getBillingSize(objectSize)
 	redis.RedisConn.SetToRedisWithExpire(*redisMsg, DEADLINE, msg.Uuid)
 	Logger.Println("[MESSAGE] Delete object successful, Uuid is:", msg.Uuid)
 }
 
-func getCountSize(objectSize string) (countSize string) {
+func getBillingSize(objectSize string) (countSize string) {
 	size, _ := strconv.ParseInt(objectSize, 10, 64)
 	count := (size + MinSizeForStandardIa - 1) / MinSizeForStandardIa * MinSizeForStandardIa
 	countSize = strconv.FormatInt(count, 10)
