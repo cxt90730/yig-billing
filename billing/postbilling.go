@@ -53,7 +53,7 @@ func postBilling() {
 	Logger.Println("[INFO] Begin to runBilling", time.Now().Format("2006-01-02 15:04:05"))
 	task := new(Task)
 	task.PidCache = make(map[string][]BillingUsage)
-	task.RedisUsageCache = make(map[string]BillingUsage)
+	task.RedisUsageCache = make(map[string][]BillingUsage)
 
 	// Get Usages by Redis which other storage class object had been deleted
 	task.ConstructUsageOtherStorageClassBeenDeletedData()
@@ -116,7 +116,7 @@ type Task struct {
 	BillingData                   BatchUsage
 	OtherStorageClassDeletedCache map[string]BillingUsageCache
 	PidCache                      map[string][]BillingUsage
-	RedisUsageCache               map[string]BillingUsage
+	RedisUsageCache               map[string][]BillingUsage
 }
 
 func (t *Task) cacheUsageToRedis(wg *sync.WaitGroup) {
@@ -124,32 +124,19 @@ func (t *Task) cacheUsageToRedis(wg *sync.WaitGroup) {
 	// Start Billing Usage to Redis
 	Logger.Println("[PLUGIN] Start Calculate Usage", time.Now().Format("2006-01-02 15:04:05"))
 	// SetToRedis
-	messages := []redis.MessageForRedis{}
 	for k, v := range t.RedisUsageCache {
 		message := new(redis.MessageForRedis)
 		message.Key = k
-		value := redis.RedisConn.GetFromRedis(k)
-		if len(value) > 0 {
-			isSetInRedis := false
-			alreadySetStorageClass := strings.Split(value, ",")
-			for _, val := range alreadySetStorageClass {
-				allParams := strings.Split(val, ":")
-				if allParams[0] == v.BillType {
-					isSetInRedis = true
-				}
+		for _, billingUsage := range v {
+			if message.Value == "" {
+				message.Value = billingUsage.BillType + ":" + strconv.FormatUint(billingUsage.Usage, 10)
+			} else {
+				message.Value = message.Value + "," + billingUsage.BillType + ":" + strconv.FormatUint(billingUsage.Usage, 10)
 			}
-			if !isSetInRedis {
-				message.Value = value + "," + v.BillType + ":" + strconv.FormatUint(v.Usage, 10)
-				redis.RedisConn.SetToRedis(*message)
-			}
-		} else {
-			message.Value = v.BillType + ":" + strconv.FormatUint(v.Usage, 10)
-			redis.RedisConn.SetToRedis(*message)
 		}
-		messages = append(messages, *message)
+		redis.RedisConn.SetToRedis(*message)
 	}
 	// Ended
-	Logger.Println("[MESSAGE] Calculate usage to redis with：", messages)
 	Logger.Println("[PLUGIN] Finish Calculate usage", time.Now().Format("2006-01-02 15:04:05"))
 	wg.Done()
 }
@@ -282,7 +269,14 @@ func (t *Task) ConstructUsageDataByFile(loggerUsageInfo, loggerUsageError, key, 
 		} else {
 			pid = redis.BucketUsagePrefix + pid
 		}
-		t.RedisUsageCache[pid] = BillingUsage{BillType: usageType, Usage: usageCount}
+		billingUsages := []BillingUsage{
+			{BillType: usageType, Usage: usageCount},
+		}
+		if t.RedisUsageCache[pid] == nil {
+			t.RedisUsageCache[pid] = billingUsages
+		} else {
+			t.RedisUsageCache[pid] = append(t.RedisUsageCache[pid], BillingUsage{BillType: usageType, Usage: usageCount})
+		}
 	}
 	Logger.Println(loggerUsageInfo, "[TRACE] Finish ConstructUsageDataByFile", time.Now().Format("2006-01-02 15:04:05"))
 }
