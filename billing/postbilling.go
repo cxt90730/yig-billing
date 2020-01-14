@@ -130,9 +130,9 @@ func (t *Task) cacheUsageToRedis(wg *sync.WaitGroup) {
 		message.Key = k
 		value := redis.RedisConn.GetFromRedis(k)
 		if len(value) > 0 {
-			message.Value = value + v.BillType + ":" + strconv.FormatUint(v.Usage, 10) + ","
+			message.Value = value + "," + v.BillType + ":" + strconv.FormatUint(v.Usage, 10)
 		} else {
-			message.Value = v.BillType + ":" + strconv.FormatUint(v.Usage, 10) + ","
+			message.Value = v.BillType + ":" + strconv.FormatUint(v.Usage, 10)
 		}
 		redis.RedisConn.SetToRedis(*message)
 		messages = append(messages, *message)
