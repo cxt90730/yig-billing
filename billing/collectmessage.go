@@ -9,7 +9,7 @@ import (
 
 const (
 	DEADLINE             = 2592000
-	SEPERATOR            = ":"
+	SEPARATOR            = ":"
 	MinSizeForStandardIa = 64 << 10
 )
 
@@ -56,7 +56,7 @@ func delDeleteObject(msg messagebus.ConsumerMessage) {
 	storageClass := info[messagebus.StorageClass]
 	objectSize := info[messagebus.ObjectSize]
 	redisMsg := new(redis.MessageForRedis)
-	redisMsg.Key = redis.BillingUsagePrefix + projectId + SEPERATOR + storageClass + SEPERATOR + bucketName + SEPERATOR + objectName
+	redisMsg.Key = redis.BillingUsagePrefix + projectId + SEPARATOR + storageClass + SEPARATOR + bucketName + SEPARATOR + objectName
 	redisMsg.Value = getBillingSize(objectSize)
 	redis.RedisConn.SetToRedisWithExpire(*redisMsg, DEADLINE, msg.Uuid)
 	Logger.Println("[MESSAGE] Delete object successful, Uuid is:", msg.Uuid)

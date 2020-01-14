@@ -47,26 +47,27 @@ func NewRedisConn() {
 
 func (r *Redis) SetToRedis(message MessageForRedis) {
 	conn := r.pool.Get()
+	defer conn.Close()
 	_, err := conn.Do("SET", message.Key, message.Value)
 	if err != nil {
 		Logger.Println("[WARNING] Redis set error:", err)
 		return
 	}
-	defer conn.Close()
 }
 
 func (r *Redis) SetToRedisWithExpire(message MessageForRedis, expire int, uuid string) {
 	conn := r.pool.Get()
+	defer conn.Close()
 	_, err := conn.Do("SETEX", message.Key, expire, message.Value)
 	if err != nil {
 		Logger.Println("[MESSAGE ERROR] Redis set error:", err, "uuid is:", uuid)
 		return
 	}
-	defer conn.Close()
 }
 
 func (r *Redis) GetUserAllKeys(keyPrefix string) (allKeys []string) {
 	conn := r.pool.Get()
+	defer conn.Close()
 	iter := 0
 	var keys []string
 	for {
@@ -84,12 +85,12 @@ func (r *Redis) GetUserAllKeys(keyPrefix string) (allKeys []string) {
 			break
 		}
 	}
-	defer conn.Close()
 	return
 }
 
 func (r *Redis) GetFromRedis(key string) (result string) {
 	conn := r.pool.Get()
+	defer conn.Close()
 	result, err := redis.String(conn.Do("GET", key))
 	if err != nil {
 		Logger.Println("[ERROR] Redis get error:", err, "Key is:", key)
