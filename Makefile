@@ -10,7 +10,7 @@ BIN_NAME=$(NAME)_$(VERSION)-$(RELEASE)_$(ARCH)
 env:
 	cp resources/confluent.repo /etc/yum.repos.d/confluent.repo
 	yum remove librdkafka* -y
-	sudo yum clean all && sudo yum install confluent-platform-2.12 -y
+	sudo yum clean all && sudo yum --enablerepo=epel-testing install -y librdkafka-devel
 
 build:
 	go build

@@ -28,6 +28,7 @@ const (
 	TargetStorageClass = "target_storage_class"
 	BucketLogging      = "bucket_logging"
 	CdnRequest         = "cdn_request"
+	LastModifiedTime   = "last_modified_time"
 )
 
 type Kafka struct {

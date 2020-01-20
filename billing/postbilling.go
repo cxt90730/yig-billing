@@ -267,7 +267,7 @@ func (t *Task) ConstructUsageDataByFile(loggerUsageInfo, loggerUsageError, key, 
 			Logger.Println(loggerUsageError, "[ERROR] strconv.ParseFloat", data[2], "error:", err)
 			continue
 		}
-		usageCount := Wrap(usageCountFlout, 1)
+		usageCount := Wrap(usageCountFlout, 0)
 		if key != Conf.TisparkShellBucket {
 
 			t.ConstructCache(pid, usageType, usageCount)
@@ -331,10 +331,10 @@ func (t *Task) ConstructRetrieveStandardIaData() {
 	Logger.Println("[TRACE] Begin to ConstructDateRetrieveData", time.Now().Format("2006-01-02 15:04:05"))
 	usageType := BillingTypeDataRetrieve
 	// `sum(increase(yig_http_response_size_bytes{is_private_subnet="false", method="GET", cdn_request="false"}[1h]))by(bucket_owner)`
-	queryString := "sum(increase(yig_http_response_size_bytes{is_private_subnet=%22false%22,method=%22GET%22,cdn_request=%22false%22,storage_class=%22STANDARD_IA%22}[1h]))by(bucket_owner)"
+	queryString := "sum(increase(yig_data_retrieve_size_bytes{method=%22GET%22,operation=%22GetObject%22,storage_class=%22STANDARD_IA%22}[1h]))by(bucket_owner)"
 	res := prometheus.GetDataFromPrometheus(queryString)
 	if res == nil {
-		Logger.Println("[ERROR] Get Empty TrafficData")
+		Logger.Println("[ERROR] Get Empty DateRetrieve")
 		return
 	}
 	for _, v := range res.Data.Result {
@@ -360,7 +360,7 @@ func (t *Task) ConstructRetrieveStandardIaData() {
 		}
 		t.ConstructCache(pid, usageType, uint64(math.Ceil(usageFloat)))
 	}
-	Logger.Println("[TRACE] Finish ConstructTrafficData", time.Now().Format("2006-01-02 15:04:05"))
+	Logger.Println("[TRACE] Finish ConstructRetrieveStandardIaData", time.Now().Format("2006-01-02 15:04:05"))
 }
 
 func (t *Task) ConstructAPIData() {
