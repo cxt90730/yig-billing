@@ -1,4 +1,4 @@
-package main
+package billing
 
 type StorageClass uint8
 
@@ -47,4 +47,3 @@ var (
 		"RRS":                 ObjectStorageClassReducedRedundancy,
 	}
 )
-

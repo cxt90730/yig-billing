@@ -1,9 +1,10 @@
-package main
+package prometheus
 
 import (
-	"net/http"
-	"io/ioutil"
 	"encoding/json"
+	. "github.com/journeymidnight/yig-billing/helper"
+	"io/ioutil"
+	"net/http"
 )
 
 type PrometheusResponse struct {
@@ -21,22 +22,22 @@ type PrometheusResult struct {
 	Value  []interface{} `json:"value"`
 }
 
-func getDataFromPrometheus(queryString string) (p *PrometheusResponse) {
-	res, err := http.Get(conf.PrometheusUrl + "/api/v1/query?query=" + queryString)
+func GetDataFromPrometheus(queryString string) (p *PrometheusResponse) {
+	res, err := http.Get(Conf.PrometheusUrl + "/api/v1/query?query=" + queryString)
 	if err != nil {
-		logger.Println("[ERROR] GetTrafficFromPrometheus:", err)
+		Logger.Println("[ERROR] GetTrafficFromPrometheus:", err)
 		return
 	}
 	defer res.Body.Close()
 	data, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		logger.Println("[ERROR] Read Prometheus data err:", err)
+		Logger.Println("[ERROR] Read Prometheus data err:", err)
 		return
 	}
 	p = new(PrometheusResponse)
 	err = json.Unmarshal(data, p)
 	if err != nil {
-		logger.Println("[ERROR] json.Unmarshal Prometheus data err:", err)
+		Logger.Println("[ERROR] json.Unmarshal Prometheus data err:", err)
 		return nil
 	}
 	return p
