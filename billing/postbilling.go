@@ -21,6 +21,7 @@ const (
 	BillingTypeAPI          = "API"
 	BillingTypeTraffic      = "TRAFFIC"
 	BillingTypeDataRetrieve = "DATARETRIEVE"
+	BillingTypeDataRestore  = "RESTORE"
 	LoggerBucketInfo        = "PLUGIN LOG"
 	LoggerBuckteError       = "WARRING BUT NOT IMPORTANT"
 )
@@ -56,14 +57,16 @@ func postBilling() {
 	task.RedisUsageCache = make(map[string][]BillingUsage)
 
 	startPostBillingTime := time.Now().UnixNano() / 1e6
-	// Get Usages by Redis which Standard_IA object had been deleted
-	task.ConstructIADeletedUsage()
+	// Get Usages by Redis which Standard_IA and Glacier object had been deleted
+	task.ConstructDeletedUsage()
 	// Get Usages by '.csv' file exported by TiSpark
 	task.ConstructUsageData(Conf.TisparkShell)
 	// Get Traffic From Prometheus
 	task.ConstructTrafficData()
 	// Get Standard_IA DataRetrieve from Prometheus
 	task.ConstructRetrieveStandardIaData()
+	// Get Glacier Restore(data retrieve) from Prometheus
+	task.ConstructRestoreGlacierData()
 	// Get API Count From Prometheus
 	task.ConstructAPIData()
 	// If Enable Usage Cache Is On, Cache Usage to Redis
@@ -166,7 +169,7 @@ func (t *Task) ConstructCache(pid, usageType string, usageCount uint64) {
 	}
 }
 
-func (t *Task) ConstructIADeletedUsage() {
+func (t *Task) ConstructDeletedUsage() {
 	t.OtherStorageClassDeletedCache = make(map[string]BillingUsageCache)
 	allKeys := redis.RedisConn.GetUserAllKeys(redis.BillingUsagePrefix + "*")
 	if len(allKeys) > 0 {
@@ -201,8 +204,8 @@ func (t *Task) ConstructIADeletedUsage() {
 			}
 		}
 	}
-	Logger.Println("[MESSAGE] ConstructIADeletedUsage return is:", t.OtherStorageClassDeletedCache)
-	Logger.Println("[TRACE] Finish ConstructIADeletedUsage", time.Now().Format("2006-01-02 15:04:05"))
+	Logger.Println("[MESSAGE] ConstructDeletedUsage return is:", t.OtherStorageClassDeletedCache)
+	Logger.Println("[TRACE] Finish ConstructDeletedUsage", time.Now().Format("2006-01-02 15:04:05"))
 }
 
 func (t *Task) ConstructUsageData(path string) {
@@ -361,6 +364,42 @@ func (t *Task) ConstructRetrieveStandardIaData() {
 		t.ConstructCache(pid, usageType, uint64(math.Ceil(usageFloat)))
 	}
 	Logger.Println("[TRACE] Finish ConstructRetrieveStandardIaData", time.Now().Format("2006-01-02 15:04:05"))
+}
+
+func (t *Task) ConstructRestoreGlacierData() {
+	Logger.Println("[TRACE] Begin to ConstructDateRetrieveData", time.Now().Format("2006-01-02 15:04:05"))
+	usageType := BillingTypeDataRestore
+	// `sum(increase(yig_http_response_size_bytes{is_private_subnet="false", method="GET", cdn_request="false"}[1h]))by(bucket_owner)`
+	queryString := "sum(increase(yig_data_restore_size_bytes{method=%22PUT%22,operation=%22RestoreObject%22,storage_class=%22GLACIER%22}[1h]))by(bucket_owner)"
+	res := prometheus.GetDataFromPrometheus(queryString)
+	if res == nil {
+		Logger.Println("[ERROR] Get Empty Restore")
+		return
+	}
+	for _, v := range res.Data.Result {
+		var pid, usageString string
+		pidMap, ok := v.Metric.(map[string]interface{})
+		if !ok {
+			continue
+		} else {
+			pid = pidMap["bucket_owner"].(string)
+		}
+		if len(v.Value) < 2 {
+			continue
+		}
+		// float string
+		usageString = v.Value[1].(string)
+		if usageString == "0" {
+			continue
+		}
+		usageFloat, err := strconv.ParseFloat(usageString, 64)
+		if err != nil {
+			Logger.Println("[ERROR] strconv.ParseFloat", usageString, "err:", err)
+			continue
+		}
+		t.ConstructCache(pid, usageType, uint64(math.Ceil(usageFloat)))
+	}
+	Logger.Println("[TRACE] Finish ConstructRestoreGlacierData", time.Now().Format("2006-01-02 15:04:05"))
 }
 
 func (t *Task) ConstructAPIData() {

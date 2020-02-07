@@ -9,9 +9,11 @@ import (
 )
 
 const (
-	TimeLayout           = "2006-01-02 15:04:05"
-	SEPARATOR            = ":"
-	MinSizeForStandardIa = 64 << 10
+	TimeLayout            = "2006-01-02 15:04:05"
+	SEPARATOR             = ":"
+	MinSizeForStandardIa  = 64 << 10
+	DEADLINEFORSTANDARDIA = 720 * time.Hour
+	DEADLINEFORGLACIER    = 1440 * time.Hour
 )
 
 func collectMessage() {
@@ -57,7 +59,7 @@ func delDeleteObject(msg messagebus.ConsumerMessage) {
 	storageClass := info[messagebus.StorageClass]
 	objectSize := info[messagebus.ObjectSize]
 	deadLine := info[messagebus.LastModifiedTime]
-	expire := getDeadLine(deadLine)
+	expire := getDeadLine(deadLine, storageClass)
 	redisMsg := new(redis.MessageForRedis)
 	redisMsg.Key = redis.BillingUsagePrefix + projectId + SEPARATOR + storageClass + SEPARATOR + bucketName + SEPARATOR + objectName
 	redisMsg.Value = getBillingSize(objectSize)
@@ -72,13 +74,18 @@ func getBillingSize(objectSize string) (countSize string) {
 	return
 }
 
-func getDeadLine(createTime string) (expire int){
+func getDeadLine(createTime, storageclass string) (expire int) {
+	var deadTime time.Time
 	t, _ := time.Parse(TimeLayout, createTime)
-	deadTime := t.Add(720 * time.Hour)
+	if storageclass == "STANDARD_IA" {
+		deadTime = t.Add(DEADLINEFORSTANDARDIA)
+	} else if storageclass == "GLACIER" {
+		deadTime = t.Add(DEADLINEFORGLACIER)
+	}
 	nowTime := time.Now()
 	if deadTime.Unix() > nowTime.Unix() {
 		expire = int(deadTime.Unix() - nowTime.Unix())
-		return 
+		return
 	}
 	return 0
 }
