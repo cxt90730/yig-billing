@@ -370,7 +370,7 @@ func (t *Task) ConstructRestoreGlacierData() {
 	Logger.Println("[TRACE] Begin to ConstructDateRetrieveData", time.Now().Format("2006-01-02 15:04:05"))
 	usageType := BillingTypeDataRestore
 	// `sum(increase(yig_http_response_size_bytes{is_private_subnet="false", method="GET", cdn_request="false"}[1h]))by(bucket_owner)`
-	queryString := "sum(increase(yig_data_restore_size_bytes{method=%22PUT%22,operation=%22RestoreObject%22,storage_class=%22GLACIER%22}[1h]))by(bucket_owner)"
+	queryString := "sum(increase(yig_data_restore_size_bytes{method=%22POST%22,operation=%22RestoreObject%22,storage_class=%22GLACIER%22}[1h]))by(bucket_owner)"
 	res := prometheus.GetDataFromPrometheus(queryString)
 	if res == nil {
 		Logger.Println("[ERROR] Get Empty Restore")
