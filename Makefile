@@ -1,6 +1,6 @@
 NAME=yig-billing
-VERSION?=v0.0.1
-RELEASE?=rc01
+VERSION?=v0.1.1
+RELEASE?=rc02
 PWD=$(shell pwd)
 ARCH=linux_amd64
 BIN_NAME=$(NAME)_$(VERSION)-$(RELEASE)_$(ARCH)
