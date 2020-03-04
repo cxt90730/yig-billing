@@ -1,11 +1,11 @@
-[Confluent.dist]
+[Confluent_billing.dist]
 name=Confluent repository (dist)
 baseurl=https://packages.confluent.io/rpm/5.3/7
 gpgcheck=1
 gpgkey=https://packages.confluent.io/rpm/5.3/archive.key
 enabled=1
 
-[Confluent]
+[Confluent_billing]
 name=Confluent repository
 baseurl=https://packages.confluent.io/rpm/5.3
 gpgcheck=1

@@ -14,12 +14,14 @@ URL:		http://github.com/cxt90730/yig-billing
 BuildRoot:	%(mktemp -ud %{_tmppath}/%{name}_%{version}-%{release}-XXXXXX)
 
 %description
+Requires:       librdkafka1
 
 %prep
 %setup -q -n %{name}_%{version}-%{release}_linux_amd64
 
 
 %build
+
 
 %install
 rm -rf %{buildroot}
@@ -28,6 +30,8 @@ install -D -m 644 yig-billing.service   %{buildroot}/usr/lib/systemd/system/yig-
 install -D -m 644 yig-billing.logrotate %{buildroot}/etc/logrotate.d/yig-billing.logrotate
 install -D -m 644 yig-billing.toml %{buildroot}%{_sysconfdir}/yig/yig-billing.toml
 install -D -m 644 fetch_usage.sh %{buildroot}%{_sysconfdir}/yig/fetch_usage.sh
+install -D -m 644 fetch_usage_bucket.sh %{buildroot}%{_sysconfdir}/yig/fetch_usage.sh
+install -D -m 644 confluent.repo %{buildroot}%{_sysconfdir}/yig/confluent.repo
 
 %post
 systemctl enable yig-billing
@@ -44,5 +48,7 @@ rm -rf %{buildroot}
 /etc/logrotate.d/yig-billing.logrotate
 %config(noreplace) /etc/yig/yig-billing.toml
 %config(noreplace) /etc/yig/fetch_usage.sh
+%config(noreplace) /etc/yig/fetch_usage_bucket.sh
+%config(noreplace) /etc/yum.repos.d/confluent.repo
 
 %changelog
