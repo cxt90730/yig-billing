@@ -9,6 +9,18 @@ const configPath = "/etc/yig/yig-billing.toml"
 
 var Conf Config
 
+type MeepoConfig struct {
+	SelfAddress     string `toml:"self_address"`
+	SelfPort        int    `toml:"self_port"`
+	RegistryAddress string `toml:"registry_address"`
+	RegistryPort    int    `toml:"registry_port"`
+	Concurrence     int    `toml:"concurrence"`
+}
+
+type TikvConfig struct {
+	PdAddresses []string `toml:"pd_addresses"`
+}
+
 type Config struct {
 	PrometheusUrl         string        `toml:"prometheus_url"`
 	RegionId              string        `toml:"region_id"`
@@ -28,6 +40,8 @@ type Config struct {
 	KafkaServer           string        `toml:"kafka_server"`
 	KafkaGroupId          string        `toml:"kafka_group_id"`
 	KafkaTopic            string        `toml:"kafka_topic"`
+	Meepo                 MeepoConfig   `toml:"meepo"`
+	Tikv                  TikvConfig    `toml:"tikv"`
 }
 
 func ReadConfig() {

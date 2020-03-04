@@ -24,3 +24,13 @@ url="url"
 path = "path"
 accessKey = "accessKey"
 secretKey = "secretAccessKey"
+
+[meepo]
+self_address="127.0.0.1" # IP address of this instance
+self_port=63376 # port to bind of this instance
+registry_address="127.0.0.1"
+registry_port=63375
+concurrence=8
+
+[tikv]
+pd_addresses=["10.5.0.101:2379", "10.5.0.102:2389", "10.5.0.103:2399"]

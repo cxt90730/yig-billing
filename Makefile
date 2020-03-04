@@ -36,3 +36,9 @@ rpm:
 	@cp ./rpmbuild/RPMS/$(BIN_NAME).rpm ./$(BIN_NAME).rpm
 	@rm -rf ./rpmbuild
 	@rm -rf ./rpm-build
+
+clean:
+	rm -rf rpmbuild/SOURCES/yig-billing*
+
+proto: mapreduce/proto/meepo.proto
+	protoc -I mapreduce/proto/ mapreduce/proto/meepo.proto --go_out=plugins=grpc:mapreduce/proto/

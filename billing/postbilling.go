@@ -4,11 +4,11 @@ import (
 	"bufio"
 	"encoding/json"
 	. "github.com/journeymidnight/yig-billing/helper"
+	"github.com/journeymidnight/yig-billing/mapreduce"
 	"github.com/journeymidnight/yig-billing/prometheus"
 	"github.com/journeymidnight/yig-billing/redis"
 	"github.com/journeymidnight/yig-billing/spark"
 
-	"io/ioutil"
 	"math"
 	"os"
 	"strconv"
@@ -59,8 +59,8 @@ func postBilling() {
 	startPostBillingTime := time.Now().UnixNano() / 1e6
 	// Get Usages by Redis which Standard_IA and Glacier object had been deleted
 	task.ConstructDeletedUsage()
-	// Get Usages by '.csv' file exported by TiSpark
-	task.ConstructUsageData(Conf.TisparkShell)
+	// Get Usages by map-reduce(aka. meepo)
+	task.ConstructUsageData()
 	// Get Traffic From Prometheus
 	task.ConstructTrafficData()
 	// Get Standard_IA DataRetrieve from Prometheus
@@ -127,7 +127,7 @@ type Task struct {
 
 func (t *Task) cacheUsageToRedis(wg *sync.WaitGroup) {
 	var messages []redis.MessageForRedis
-	t.ConstructUsageData(Conf.TisparkShellBucket)
+	t.ConstructUsageData()
 	// Start Billing Usage to Redis
 	Logger.Info("Start Calculate Usage", time.Now().Format("2006-01-02 15:04:05"))
 	// SetToRedis
@@ -208,38 +208,15 @@ func (t *Task) ConstructDeletedUsage() {
 	Logger.Info("Finish ConstructDeletedUsage", time.Now().Format("2006-01-02 15:04:05"))
 }
 
-func (t *Task) ConstructUsageData(path string) {
-	var loggerUsageInfo, loggerUsageError string
-	key := path
-	if key == Conf.TisparkShellBucket {
-		loggerUsageInfo = LoggerBucketInfo
-		loggerUsageError = LoggerBuckteError
-	} else {
-		loggerUsageInfo = ""
-		loggerUsageError = ""
-	}
-	hour := time.Now().Format(folderLayoutStr)
-	usageDataDir := Conf.UsageDataDir + string(os.PathSeparator) + hour
-	Logger.Info(loggerUsageInfo, "usageDataDir:", usageDataDir)
-	spark.ExecBash(path, usageDataDir, Conf.SparkHome)
-
-	// Find Usage files, Construct map
-	dir, err := ioutil.ReadDir(usageDataDir)
+func (t *Task) ConstructUsageData() {
+	handle, err := mapreduce.Registry.CalculateUsage()
 	if err != nil {
-		Logger.Error("Read UsageDataDir error:", err)
+		Logger.Error("CalculateUsage error:", err)
 		return
 	}
-	for _, fi := range dir {
-		if fi.IsDir() {
-			continue
-		}
-		if strings.HasSuffix(fi.Name(), ".csv") {
-			filePath := usageDataDir + string(os.PathSeparator) + fi.Name()
-			Logger.Info(loggerUsageInfo, "Read File:", filePath)
-			t.ConstructUsageDataByFile(loggerUsageInfo, loggerUsageError, key, filePath)
-			break
-		}
-	}
+	<-handle.Done
+	// now handle.Result and handle.UserBuckets could be used
+	// TODO
 }
 
 func (t *Task) ConstructUsageDataByFile(loggerUsageInfo, loggerUsageError, key, filePath string) {

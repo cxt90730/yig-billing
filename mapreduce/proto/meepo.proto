@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package meepo_pb;
+
+message Empty{}
+
+service Meepo {
+    rpc AddJob(Job) returns (Empty) {}
+}
+
+message UsageByClass {
+    // storage class -> used bytes
+    int64 standard = 1;
+    int64 reducedRedundancy = 2;
+    int64 glacier = 3;
+    int64 standardIA = 4;
+    int64 oneZoneIA = 5;
+    int64 intelligentTiering = 6;
+    int64 deepArchive = 7;
+}
+
+message Job {
+    /// request parameters:
+
+    uint64 timestamp = 1;
+    int64 id = 2;
+    bytes startKey = 3;
+    bytes endKey = 4;
+
+    /// response parameters:
+    // bucket name -> storage class usages, returned results
+    map<string, UsageByClass> usage = 5;
+    // job error, empty string for no error
+    string error = 6;
+    // how many keys processed
+    int64 entries = 7;
+
+    /// for bookkeeping in registry:
+    // which meepo this job is supposed to run on, IP address
+    string meepo = 8;
+}
+
+service MeepoRegistry {
+    rpc Register(MeepoInstance) returns (Empty) {}
+    rpc JobDone(Job) returns (Empty) {}
+    // solely for CLI tools to trigger another usage calculation/publishing,
+    // returns nothing
+    rpc TriggerUsageCalculation(Empty) returns (Empty) {}
+}
+
+message MeepoInstance {
+    string IP = 1;
+    int32 port = 2;
+    int64 runningJobs = 3;
+}

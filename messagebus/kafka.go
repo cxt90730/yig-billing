@@ -1,11 +1,9 @@
 package messagebus
 
 import (
-	"bytes"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/google/uuid"
 	. "github.com/journeymidnight/yig-billing/helper"
-	"github.com/ugorji/go/codec"
 )
 
 func NewConsumer() {
@@ -54,17 +52,4 @@ func StartConsumerReceiver() {
 			Logger.Warn("Consumer error: %v (%v)\n", err, msg)
 		}
 	}
-}
-
-func MsgPackMarshal(v interface{}) ([]byte, error) {
-	var buf = new(bytes.Buffer)
-	enc := codec.NewEncoder(buf, new(codec.MsgpackHandle))
-	err := enc.Encode(v)
-	return buf.Bytes(), err
-}
-
-func MsgPackUnMarshal(data []byte, v interface{}) error {
-	var buf = bytes.NewBuffer(data)
-	dec := codec.NewDecoder(buf, new(codec.MsgpackHandle))
-	return dec.Decode(v)
 }
