@@ -26,32 +26,32 @@ func collector() {
 		message := <-messagebus.ConsumerMessagePipe
 		isEffective := isMessageEffective(message)
 		if !isEffective {
-			Logger.Println("[INVALID MESSAGE] UUID is:", message.Uuid)
+			Logger.Info("UUID is:", message.Uuid)
 			continue
 		}
 		if message.Messages[messagebus.OperationName] == "DeleteObject" {
 			delDeleteObject(message)
 		} else {
-			Logger.Println("[INVALID MESSAGE] UUID is:", message.Uuid)
+			Logger.Info("UUID is:", message.Uuid)
 		}
 	}
 }
 
 func isMessageEffective(message messagebus.ConsumerMessage) bool {
 	if message.Messages[messagebus.HttpStatus] != "200" || message.Messages[messagebus.BucketName] == "-" || message.Messages[messagebus.ObjectName] == "-" {
-		Logger.Println("[INVALID MESSAGE] Request err, uid is:", message.Uuid)
+		Logger.Warn("Request err, uid is:", message.Uuid)
 		return false
 	} else {
 		if message.Messages[messagebus.StorageClass] != "STANDARD" && message.Messages[messagebus.StorageClass] != "-" {
 			return true
 		}
-		Logger.Println("[INVALID MESSAGE] Request storage class err, uid is:", message.Uuid)
+		Logger.Warn("Request storage class err, uid is:", message.Uuid)
 		return false
 	}
 }
 
 func delDeleteObject(msg messagebus.ConsumerMessage) {
-	Logger.Println("[MESSAGE] Enter del delete object, Uuid is:", msg.Uuid)
+	Logger.Info("Enter del delete object, Uuid is:", msg.Uuid)
 	info := msg.Messages
 	projectId := info[messagebus.ProjectId]
 	bucketName := info[messagebus.BucketName]
@@ -64,7 +64,7 @@ func delDeleteObject(msg messagebus.ConsumerMessage) {
 	redisMsg.Key = redis.BillingUsagePrefix + projectId + SEPARATOR + storageClass + SEPARATOR + bucketName + SEPARATOR + objectName
 	redisMsg.Value = getBillingSize(objectSize)
 	redis.RedisConn.SetToRedisWithExpire(*redisMsg, expire, msg.Uuid)
-	Logger.Println("[MESSAGE] Delete object successful, Uuid is:", msg.Uuid, ",expire is:", expire, "s")
+	Logger.Info("Delete object successful, Uuid is:", msg.Uuid, ",expire is:", expire, "s")
 }
 
 func getBillingSize(objectSize string) (countSize string) {

@@ -3,9 +3,9 @@ package main
 import (
 	"github.com/journeymidnight/yig-billing/billing"
 	"github.com/journeymidnight/yig-billing/helper"
+	"github.com/journeymidnight/yig-billing/log"
 	"github.com/journeymidnight/yig-billing/messagebus"
 	"github.com/journeymidnight/yig-billing/redis"
-	"log"
 	"os"
 	"os/signal"
 	"runtime"
@@ -27,15 +27,15 @@ func main() {
 		s := <-signalQueue
 		switch s {
 		case syscall.SIGHUP:
-			log.Println("[WARNING] Recieve signal SIGHUP")
+			helper.Logger.Warn("Recieve signal SIGHUP")
 			// reload units
 			initModules()
 		case syscall.SIGUSR1:
-			log.Println("[WARNING] Recieve signal SIGUSR1")
+			helper.Logger.Warn("Recieve signal SIGUSR1")
 			go DumpStacks()
 		default:
-			log.Println("[WARNING] Recieve signal:", s.String())
-			log.Println("[INFO] Stop yig billing...")
+			helper.Logger.Warn("Recieve signal:", s.String())
+			helper.Logger.Info("Stop yig billing...")
 			return
 		}
 	}
@@ -44,13 +44,17 @@ func main() {
 func DumpStacks() {
 	buf := make([]byte, 1<<16)
 	stacklen := runtime.Stack(buf, true)
-	helper.Logger.Printf("=== received SIGQUIT ===\n*** goroutine dump...\n%s\n*** end\n", buf[:stacklen])
+	helper.Logger.Warn("=== received SIGQUIT ===\n*** goroutine dump...\n%s\n*** end\n", buf[:stacklen])
 }
 
 func initModules() {
 	// Load configuration files and logs
 	helper.ReadConfig()
-	helper.NewLogger()
+	logLevel := log.ParseLevel(helper.Conf.LogLevel)
+	helper.Logger = log.NewFileLogger(helper.Conf.LogPath, logLevel)
+	defer helper.Logger.Close()
+	helper.Logger.Info("YIG conf:", helper.Conf)
+	helper.Logger.Info("YIG instance ID:", helper.GenerateRandomId())
 	// Initialize Redis config
 	redis.NewRedisConn()
 	// Initialize kafka consumer

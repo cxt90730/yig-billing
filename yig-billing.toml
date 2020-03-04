@@ -3,6 +3,7 @@ region_id = "region_id"
 usage_data_dir = "/tmp/usage"
 bucket_usage_data_dir = "/tmp/usage_bucket"
 log_path = "/var/log/yig/billing.log"
+log_level = "info"
 
 enable_post_billing_cron = true
 post_billing_spec = "@hourly"

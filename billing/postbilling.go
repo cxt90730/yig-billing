@@ -51,7 +51,7 @@ const folderLayoutStr = "2006010215"
 
 func postBilling() {
 	wg := new(sync.WaitGroup)
-	Logger.Println("[INFO] Begin to runBilling", time.Now().Format("2006-01-02 15:04:05"))
+	Logger.Info("Begin to runBilling", time.Now().Format("2006-01-02 15:04:05"))
 	task := new(Task)
 	task.PidCache = make(map[string][]BillingUsage)
 	task.RedisUsageCache = make(map[string][]BillingUsage)
@@ -94,22 +94,22 @@ func postBilling() {
 
 	sendingData, err := json.Marshal(task.BillingData)
 	if err != nil {
-		Logger.Println("[ERROR] json.Marshal", task.BillingData, "error:", err)
+		Logger.Error("json.Marshal", task.BillingData, "error:", err)
 		return
 	}
 
-	Logger.Println("[TRACE] Sending data:", string(sendingData))
+	Logger.Info("Sending data:", string(sendingData))
 
 	// Implement
 	err = Send(Conf.Producer, sendingData)
 	if err != nil {
-		Logger.Println("[ERROR] Sending data error:", err)
+		Logger.Error("Sending data error:", err)
 		return
 	}
 	// Sending data
 	endPostBillingTime := time.Now().UnixNano() / 1e6
 	consumeTime := endPostBillingTime - startPostBillingTime
-	Logger.Println("[INFO] Finish runBilling", time.Now().Format("2006-01-02 15:04:05"), "consumed time:", consumeTime, "ms")
+	Logger.Info("Finish runBilling", time.Now().Format("2006-01-02 15:04:05"), "consumed time:", consumeTime, "ms")
 	wg.Wait()
 
 }
@@ -129,7 +129,7 @@ func (t *Task) cacheUsageToRedis(wg *sync.WaitGroup) {
 	var messages []redis.MessageForRedis
 	t.ConstructUsageData(Conf.TisparkShellBucket)
 	// Start Billing Usage to Redis
-	Logger.Println("[PLUGIN] Start Calculate Usage", time.Now().Format("2006-01-02 15:04:05"))
+	Logger.Info("Start Calculate Usage", time.Now().Format("2006-01-02 15:04:05"))
 	// SetToRedis
 	for k, v := range t.RedisUsageCache {
 		message := new(redis.MessageForRedis)
@@ -145,8 +145,8 @@ func (t *Task) cacheUsageToRedis(wg *sync.WaitGroup) {
 		messages = append(messages, *message)
 	}
 	// Ended
-	Logger.Println("[PLUGIN] Calculate usage is:", messages)
-	Logger.Println("[PLUGIN] Finish Calculate usage", time.Now().Format("2006-01-02 15:04:05"))
+	Logger.Info("Calculate usage is:", messages)
+	Logger.Info("Finish Calculate usage", time.Now().Format("2006-01-02 15:04:05"))
 	wg.Done()
 }
 
@@ -181,7 +181,7 @@ func (t *Task) ConstructDeletedUsage() {
 			if usage != "" {
 				uintUsage, err := strconv.ParseUint(usage, 10, 64)
 				if err != nil {
-					Logger.Println("[ERROR] strconv.ParseInt with ConstructIADeletedUsage", usage, "error:", err)
+					Logger.Error("strconv.ParseInt with ConstructIADeletedUsage", usage, "error:", err)
 				}
 				if t.OtherStorageClassDeletedCache[pid].Cache == nil {
 					billingCache := new(BillingUsageCache)
@@ -204,8 +204,8 @@ func (t *Task) ConstructDeletedUsage() {
 			}
 		}
 	}
-	Logger.Println("[MESSAGE] ConstructDeletedUsage return is:", t.OtherStorageClassDeletedCache)
-	Logger.Println("[TRACE] Finish ConstructDeletedUsage", time.Now().Format("2006-01-02 15:04:05"))
+	Logger.Info("ConstructDeletedUsage return is:", t.OtherStorageClassDeletedCache)
+	Logger.Info("Finish ConstructDeletedUsage", time.Now().Format("2006-01-02 15:04:05"))
 }
 
 func (t *Task) ConstructUsageData(path string) {
@@ -220,13 +220,13 @@ func (t *Task) ConstructUsageData(path string) {
 	}
 	hour := time.Now().Format(folderLayoutStr)
 	usageDataDir := Conf.UsageDataDir + string(os.PathSeparator) + hour
-	Logger.Println(loggerUsageInfo, "[TRACE] usageDataDir:", usageDataDir)
+	Logger.Info(loggerUsageInfo, "usageDataDir:", usageDataDir)
 	spark.ExecBash(path, usageDataDir, Conf.SparkHome)
 
 	// Find Usage files, Construct map
 	dir, err := ioutil.ReadDir(usageDataDir)
 	if err != nil {
-		Logger.Println("[ERROR] Read UsageDataDir error:", err)
+		Logger.Error("Read UsageDataDir error:", err)
 		return
 	}
 	for _, fi := range dir {
@@ -235,7 +235,7 @@ func (t *Task) ConstructUsageData(path string) {
 		}
 		if strings.HasSuffix(fi.Name(), ".csv") {
 			filePath := usageDataDir + string(os.PathSeparator) + fi.Name()
-			Logger.Println(loggerUsageInfo, "[TRACE] Read File:", filePath)
+			Logger.Info(loggerUsageInfo, "Read File:", filePath)
 			t.ConstructUsageDataByFile(loggerUsageInfo, loggerUsageError, key, filePath)
 			break
 		}
@@ -243,10 +243,10 @@ func (t *Task) ConstructUsageData(path string) {
 }
 
 func (t *Task) ConstructUsageDataByFile(loggerUsageInfo, loggerUsageError, key, filePath string) {
-	Logger.Println(loggerUsageInfo, "[TRACE] Begin to ConstructUsageDataByFile", time.Now().Format("2006-01-02 15:04:05"))
+	Logger.Info(loggerUsageInfo, "Begin to ConstructUsageDataByFile", time.Now().Format("2006-01-02 15:04:05"))
 	f, err := os.Open(filePath)
 	if err != nil {
-		Logger.Println("[ERROR] Read file", filePath, "error:", err)
+		Logger.Error("Read file", filePath, "error:", err)
 		return
 	}
 	defer f.Close()
@@ -261,13 +261,13 @@ func (t *Task) ConstructUsageDataByFile(loggerUsageInfo, loggerUsageError, key, 
 		pid := data[0]
 		usageTypeIndex, err := strconv.Atoi(data[1])
 		if err != nil {
-			Logger.Println(loggerUsageError, "[ERROR] strconv.Atoi", data[1], "error:", err)
+			Logger.Error("strconv.Atoi", data[1], "error:", err)
 			continue
 		}
 		usageType := StorageClassIndexMap[(StorageClass(usageTypeIndex))]
 		usageCountFlout, err := strconv.ParseFloat(data[2], 64)
 		if err != nil {
-			Logger.Println(loggerUsageError, "[ERROR] strconv.ParseFloat", data[2], "error:", err)
+			Logger.Error("strconv.ParseFloat", data[2], "error:", err)
 			continue
 		}
 		usageCount := Wrap(usageCountFlout, 0)
@@ -287,7 +287,7 @@ func (t *Task) ConstructUsageDataByFile(loggerUsageInfo, loggerUsageError, key, 
 			t.RedisUsageCache[pid] = append(t.RedisUsageCache[pid], BillingUsage{BillType: usageType, Usage: usageCount})
 		}
 	}
-	Logger.Println(loggerUsageInfo, "[TRACE] Finish ConstructUsageDataByFile", time.Now().Format("2006-01-02 15:04:05"))
+	Logger.Info(loggerUsageInfo, "Finish ConstructUsageDataByFile", time.Now().Format("2006-01-02 15:04:05"))
 }
 
 func Wrap(num float64, retain int) uint64 {
@@ -295,13 +295,13 @@ func Wrap(num float64, retain int) uint64 {
 }
 
 func (t *Task) ConstructTrafficData() {
-	Logger.Println("[TRACE] Begin to ConstructTrafficData", time.Now().Format("2006-01-02 15:04:05"))
+	Logger.Info("Begin to ConstructTrafficData", time.Now().Format("2006-01-02 15:04:05"))
 	usageType := BillingTypeTraffic
 	// `sum(increase(yig_http_response_size_bytes{is_private_subnet="false", method="GET", cdn_request="false"}[1h]))by(bucket_owner)`
 	queryString := "sum(increase(yig_http_response_size_bytes{is_private_subnet=%22false%22,method=%22GET%22,cdn_request=%22false%22}[1h]))by(bucket_owner)"
 	res := prometheus.GetDataFromPrometheus(queryString)
 	if res == nil {
-		Logger.Println("[ERROR] Get Empty TrafficData")
+		Logger.Error("Get Empty TrafficData")
 		return
 	}
 	for _, v := range res.Data.Result {
@@ -322,22 +322,22 @@ func (t *Task) ConstructTrafficData() {
 		}
 		usageFloat, err := strconv.ParseFloat(usageString, 64)
 		if err != nil {
-			Logger.Println("[ERROR] strconv.ParseFloat", usageString, "err:", err)
+			Logger.Error("strconv.ParseFloat", usageString, "err:", err)
 			continue
 		}
 		t.ConstructCache(pid, usageType, uint64(math.Ceil(usageFloat)))
 	}
-	Logger.Println("[TRACE] Finish ConstructTrafficData", time.Now().Format("2006-01-02 15:04:05"))
+	Logger.Info("Finish ConstructTrafficData", time.Now().Format("2006-01-02 15:04:05"))
 }
 
 func (t *Task) ConstructRetrieveStandardIaData() {
-	Logger.Println("[TRACE] Begin to ConstructDateRetrieveData", time.Now().Format("2006-01-02 15:04:05"))
+	Logger.Info("Begin to ConstructDateRetrieveData", time.Now().Format("2006-01-02 15:04:05"))
 	usageType := BillingTypeDataRetrieve
 	// `sum(increase(yig_http_response_size_bytes{is_private_subnet="false", method="GET", cdn_request="false"}[1h]))by(bucket_owner)`
 	queryString := "sum(increase(yig_data_retrieve_size_bytes{method=%22GET%22,operation=%22GetObject%22,storage_class=%22STANDARD_IA%22}[1h]))by(bucket_owner)"
 	res := prometheus.GetDataFromPrometheus(queryString)
 	if res == nil {
-		Logger.Println("[ERROR] Get Empty DateRetrieve")
+		Logger.Error("Get Empty DateRetrieve")
 		return
 	}
 	for _, v := range res.Data.Result {
@@ -358,22 +358,22 @@ func (t *Task) ConstructRetrieveStandardIaData() {
 		}
 		usageFloat, err := strconv.ParseFloat(usageString, 64)
 		if err != nil {
-			Logger.Println("[ERROR] strconv.ParseFloat", usageString, "err:", err)
+			Logger.Error("strconv.ParseFloat", usageString, "err:", err)
 			continue
 		}
 		t.ConstructCache(pid, usageType, uint64(math.Ceil(usageFloat)))
 	}
-	Logger.Println("[TRACE] Finish ConstructRetrieveStandardIaData", time.Now().Format("2006-01-02 15:04:05"))
+	Logger.Info("Finish ConstructRetrieveStandardIaData", time.Now().Format("2006-01-02 15:04:05"))
 }
 
 func (t *Task) ConstructRestoreGlacierData() {
-	Logger.Println("[TRACE] Begin to ConstructDateRetrieveData", time.Now().Format("2006-01-02 15:04:05"))
+	Logger.Info("Begin to ConstructDateRetrieveData", time.Now().Format("2006-01-02 15:04:05"))
 	usageType := BillingTypeDataRestore
 	// `sum(increase(yig_http_response_size_bytes{is_private_subnet="false", method="GET", cdn_request="false"}[1h]))by(bucket_owner)`
 	queryString := "sum(increase(yig_data_restore_size_bytes{method=%22POST%22,operation=%22RestoreObject%22,storage_class=%22GLACIER%22}[1h]))by(bucket_owner)"
 	res := prometheus.GetDataFromPrometheus(queryString)
 	if res == nil {
-		Logger.Println("[ERROR] Get Empty Restore")
+		Logger.Error("Get Empty Restore")
 		return
 	}
 	for _, v := range res.Data.Result {
@@ -394,22 +394,22 @@ func (t *Task) ConstructRestoreGlacierData() {
 		}
 		usageFloat, err := strconv.ParseFloat(usageString, 64)
 		if err != nil {
-			Logger.Println("[ERROR] strconv.ParseFloat", usageString, "err:", err)
+			Logger.Error("strconv.ParseFloat", usageString, "err:", err)
 			continue
 		}
 		t.ConstructCache(pid, usageType, uint64(math.Ceil(usageFloat)))
 	}
-	Logger.Println("[TRACE] Finish ConstructRestoreGlacierData", time.Now().Format("2006-01-02 15:04:05"))
+	Logger.Info("Finish ConstructRestoreGlacierData", time.Now().Format("2006-01-02 15:04:05"))
 }
 
 func (t *Task) ConstructAPIData() {
-	Logger.Println("[TRACE] Begin to ConstructAPIData", time.Now().Format("2006-01-02 15:04:05"))
+	Logger.Info("Begin to ConstructAPIData", time.Now().Format("2006-01-02 15:04:05"))
 
 	usageType := BillingTypeAPI
 	queryString := `sum(increase(yig_http_response_count_total[1h]))by(bucket_owner)`
 	res := prometheus.GetDataFromPrometheus(queryString)
 	if res == nil {
-		Logger.Println("[ERROR] Get Empty TrafficData")
+		Logger.Error("Get Empty TrafficData")
 		return
 	}
 	for _, v := range res.Data.Result {
@@ -430,10 +430,10 @@ func (t *Task) ConstructAPIData() {
 		}
 		usageFloat, err := strconv.ParseFloat(usageString, 64)
 		if err != nil {
-			Logger.Println("[ERROR] strconv.ParseFloat", usageString, "err:", err)
+			Logger.Error("strconv.ParseFloat", usageString, "err:", err)
 			continue
 		}
 		t.ConstructCache(pid, usageType, uint64(math.Ceil(usageFloat)))
 	}
-	Logger.Println("[TRACE] Finish ConstructAPIData", time.Now().Format("2006-01-02 15:04:05"))
+	Logger.Info("Finish ConstructAPIData", time.Now().Format("2006-01-02 15:04:05"))
 }

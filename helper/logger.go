@@ -1,19 +1,14 @@
 package helper
 
 import (
-	"log"
-	"os"
+	"github.com/journeymidnight/yig-billing/log"
 )
 
-var Logger *log.Logger
+// Global singleton loggers
+var Logger log.Logger
 
-func NewLogger() {
-	f, err := os.OpenFile(Conf.LogPath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+func PanicOnError(err error, message string)  {
 	if err != nil {
-		panic("Failed to open log file " + Conf.LogPath)
+		panic(message + " " + err.Error())
 	}
-	Logger = log.New(f, "[yig]", log.LstdFlags)
-	Logger.Println("[INFO] Start Yig Billing...")
-	Logger.Printf("[TRACE] Config:\n %+v", Conf)
-	return
 }
