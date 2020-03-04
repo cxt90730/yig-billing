@@ -14,7 +14,17 @@ import (
 
 func main() {
 	// Initialization modules
-	initModules()
+	// Load configuration files and logs
+	helper.ReadConfig()
+	logLevel := log.ParseLevel(helper.Conf.LogLevel)
+	helper.Logger = log.NewFileLogger(helper.Conf.LogPath, logLevel)
+	defer helper.Logger.Close()
+	helper.Logger.Info("YIG conf:", helper.Conf)
+	helper.Logger.Info("YIG instance ID:", helper.GenerateRandomId())
+	// Initialize Redis config
+	redis.NewRedisConn()
+	// Initialize kafka consumer
+	messagebus.NewConsumer()
 
 	// Start billing server
 	go billing.Billing()
@@ -28,8 +38,6 @@ func main() {
 		switch s {
 		case syscall.SIGHUP:
 			helper.Logger.Warn("Recieve signal SIGHUP")
-			// reload units
-			initModules()
 		case syscall.SIGUSR1:
 			helper.Logger.Warn("Recieve signal SIGUSR1")
 			go DumpStacks()
@@ -45,18 +53,4 @@ func DumpStacks() {
 	buf := make([]byte, 1<<16)
 	stacklen := runtime.Stack(buf, true)
 	helper.Logger.Warn("=== received SIGQUIT ===\n*** goroutine dump...\n%s\n*** end\n", buf[:stacklen])
-}
-
-func initModules() {
-	// Load configuration files and logs
-	helper.ReadConfig()
-	logLevel := log.ParseLevel(helper.Conf.LogLevel)
-	helper.Logger = log.NewFileLogger(helper.Conf.LogPath, logLevel)
-	defer helper.Logger.Close()
-	helper.Logger.Info("YIG conf:", helper.Conf)
-	helper.Logger.Info("YIG instance ID:", helper.GenerateRandomId())
-	// Initialize Redis config
-	redis.NewRedisConn()
-	// Initialize kafka consumer
-	messagebus.NewConsumer()
 }
