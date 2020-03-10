@@ -25,19 +25,19 @@ type PrometheusResult struct {
 func GetDataFromPrometheus(queryString string) (p *PrometheusResponse) {
 	res, err := http.Get(Conf.PrometheusUrl + "/api/v1/query?query=" + queryString)
 	if err != nil {
-		Logger.Println("[ERROR] GetTrafficFromPrometheus:", err)
+		Logger.Error("GetTrafficFromPrometheus:", err)
 		return
 	}
 	defer res.Body.Close()
 	data, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		Logger.Println("[ERROR] Read Prometheus data err:", err)
+		Logger.Error("Read Prometheus data err:", err)
 		return
 	}
 	p = new(PrometheusResponse)
 	err = json.Unmarshal(data, p)
 	if err != nil {
-		Logger.Println("[ERROR] json.Unmarshal Prometheus data err:", err)
+		Logger.Error("json.Unmarshal Prometheus data err:", err)
 		return nil
 	}
 	return p

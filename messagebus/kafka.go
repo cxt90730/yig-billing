@@ -14,18 +14,18 @@ func NewConsumer() {
 		"group.id":          Conf.KafkaGroupId,
 		"auto.offset.reset": "earliest"})
 	if err != nil {
-		Logger.Println("[ERROR] New Consumer failed with:", err)
+		Logger.Error("New Consumer failed with:", err)
 		panic(err)
 	}
 	err = consumer.Subscribe(Conf.KafkaTopic, nil)
 	if err != nil {
-		Logger.Println("[ERROR] New Consumer with topic err:", err)
+		Logger.Error("New Consumer with topic err:", err)
 		panic(err)
 	}
 	KafkaConsumer = new(Kafka)
 	KafkaConsumer.consumer = consumer
 	ConsumerMessagePipe = make(chan ConsumerMessage)
-	Logger.Println("[INFO] New Consumer successful!")
+	Logger.Info("New Consumer successful!")
 }
 
 func StartConsumerReceiver() {
@@ -37,7 +37,7 @@ func StartConsumerReceiver() {
 				value := make([]string, 0)
 				err = MsgPackUnMarshal(msg.Value, &value)
 				if err != nil {
-					Logger.Println("[KAFKA ERROR] Wrong message with err:", err, "Message is:", string(msg.Value))
+					Logger.Error("Wrong message with err:", err, "Message is:", string(msg.Value))
 					continue
 				}
 				for i := 1; i < len(value); i += 2 {
@@ -46,12 +46,12 @@ func StartConsumerReceiver() {
 				message := new(ConsumerMessage)
 				message.Uuid = uuid.New().String()
 				message.Messages = kafkaMessages
-				Logger.Println("[KAFKA]", message.Uuid, "The message is:", message.Messages)
+				Logger.Info("[KAFKA]", message.Uuid, "The message is:", message.Messages)
 				ConsumerMessagePipe <- *message
 			}
 		} else {
 			// The client will automatically try to recover from all errors.
-			Logger.Printf("Consumer error: %v (%v)\n", err, msg)
+			Logger.Warn("Consumer error: %v (%v)\n", err, msg)
 		}
 	}
 }

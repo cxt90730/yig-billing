@@ -9,9 +9,11 @@ import (
 )
 
 const (
-	TimeLayout           = "2006-01-02 15:04:05"
-	SEPARATOR            = ":"
-	MinSizeForStandardIa = 64 << 10
+	TimeLayout            = "2006-01-02 15:04:05"
+	SEPARATOR             = ":"
+	MinSizeForStandardIa  = 64 << 10
+	DEADLINEFORSTANDARDIA = 720 * time.Hour
+	DEADLINEFORGLACIER    = 1440 * time.Hour
 )
 
 func collectMessage() {
@@ -24,32 +26,32 @@ func collector() {
 		message := <-messagebus.ConsumerMessagePipe
 		isEffective := isMessageEffective(message)
 		if !isEffective {
-			Logger.Println("[INVALID MESSAGE] UUID is:", message.Uuid)
+			Logger.Info("UUID is:", message.Uuid)
 			continue
 		}
 		if message.Messages[messagebus.OperationName] == "DeleteObject" {
 			delDeleteObject(message)
 		} else {
-			Logger.Println("[INVALID MESSAGE] UUID is:", message.Uuid)
+			Logger.Info("UUID is:", message.Uuid)
 		}
 	}
 }
 
 func isMessageEffective(message messagebus.ConsumerMessage) bool {
 	if message.Messages[messagebus.HttpStatus] != "200" || message.Messages[messagebus.BucketName] == "-" || message.Messages[messagebus.ObjectName] == "-" {
-		Logger.Println("[INVALID MESSAGE] Request err, uid is:", message.Uuid)
+		Logger.Warn("Request err, uid is:", message.Uuid)
 		return false
 	} else {
 		if message.Messages[messagebus.StorageClass] != "STANDARD" && message.Messages[messagebus.StorageClass] != "-" {
 			return true
 		}
-		Logger.Println("[INVALID MESSAGE] Request storage class err, uid is:", message.Uuid)
+		Logger.Warn("Request storage class err, uid is:", message.Uuid)
 		return false
 	}
 }
 
 func delDeleteObject(msg messagebus.ConsumerMessage) {
-	Logger.Println("[MESSAGE] Enter del delete object, Uuid is:", msg.Uuid)
+	Logger.Info("Enter del delete object, Uuid is:", msg.Uuid)
 	info := msg.Messages
 	projectId := info[messagebus.ProjectId]
 	bucketName := info[messagebus.BucketName]
@@ -57,12 +59,12 @@ func delDeleteObject(msg messagebus.ConsumerMessage) {
 	storageClass := info[messagebus.StorageClass]
 	objectSize := info[messagebus.ObjectSize]
 	deadLine := info[messagebus.LastModifiedTime]
-	expire := getDeadLine(deadLine)
+	expire := getDeadLine(deadLine, storageClass)
 	redisMsg := new(redis.MessageForRedis)
 	redisMsg.Key = redis.BillingUsagePrefix + projectId + SEPARATOR + storageClass + SEPARATOR + bucketName + SEPARATOR + objectName
 	redisMsg.Value = getBillingSize(objectSize)
 	redis.RedisConn.SetToRedisWithExpire(*redisMsg, expire, msg.Uuid)
-	Logger.Println("[MESSAGE] Delete object successful, Uuid is:", msg.Uuid, ",expire is:", expire, "s")
+	Logger.Info("Delete object successful, Uuid is:", msg.Uuid, ",expire is:", expire, "s")
 }
 
 func getBillingSize(objectSize string) (countSize string) {
@@ -72,13 +74,18 @@ func getBillingSize(objectSize string) (countSize string) {
 	return
 }
 
-func getDeadLine(createTime string) (expire int){
+func getDeadLine(createTime, storageclass string) (expire int) {
+	var deadTime time.Time
 	t, _ := time.Parse(TimeLayout, createTime)
-	deadTime := t.Add(720 * time.Hour)
+	if storageclass == "STANDARD_IA" {
+		deadTime = t.Add(DEADLINEFORSTANDARDIA)
+	} else if storageclass == "GLACIER" {
+		deadTime = t.Add(DEADLINEFORGLACIER)
+	}
 	nowTime := time.Now()
 	if deadTime.Unix() > nowTime.Unix() {
 		expire = int(deadTime.Unix() - nowTime.Unix())
-		return 
+		return
 	}
 	return 0
 }

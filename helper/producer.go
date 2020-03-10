@@ -55,11 +55,11 @@ func GetSignature(httpMethod, requestUrl, secret string) string {
 		canonicalizedQueryString += qs.Keys[i] + "=" + qs.Vals[i] + "&"
 	}
 	canonicalizedQueryString = canonicalizedQueryString[:len(canonicalizedQueryString)-1]
-	Logger.Println("[TRACE] canonicalizedQueryString:", canonicalizedQueryString)
+	Logger.Info("canonicalizedQueryString:", canonicalizedQueryString)
 	stringToSign := httpMethod + "&" + percentEncode("/") + "&" +
 		percentEncode(canonicalizedQueryString)
-	Logger.Println("[TRACE] StringToSign:", stringToSign)
-	Logger.Println("[TRACE] SecretKey:", secret)
+	Logger.Info("StringToSign:", stringToSign)
+	Logger.Info("SecretKey:", secret)
 	h := hmac.New(func() hash.Hash { return sha1.New() }, []byte(secret+"&"))
 	io.WriteString(h, stringToSign)
 	signedStr := url.QueryEscape(base64.StdEncoding.EncodeToString(h.Sum(nil)))
@@ -114,7 +114,7 @@ type DummyProducer struct {
 func (d DummyProducer) Send(data []byte) error {
 	receiverUrl := d.Url + d.Path + "?AccessKeyId=" + d.AccessKey
 	receiverUrl += "&Signature=" + GetSignature("POST", receiverUrl, d.SecretKey)
-	Logger.Println("[INFO] Post data to", receiverUrl)
+	Logger.Info("Post data to", receiverUrl)
 
 	request, _ := http.NewRequest("POST", receiverUrl, bytes.NewReader(data))
 	request.Header.Set("Content-Type", "application/json;charset=UTF-8")

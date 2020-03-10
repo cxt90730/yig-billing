@@ -42,7 +42,7 @@ func NewRedisConn() {
 			return err
 		},
 	}
-	Logger.Println("[INFO] Initialize redis successfully")
+	Logger.Info("Initialize redis successfully")
 }
 
 func (r *Redis) SetToRedis(message MessageForRedis) {
@@ -50,7 +50,7 @@ func (r *Redis) SetToRedis(message MessageForRedis) {
 	defer conn.Close()
 	_, err := conn.Do("SET", message.Key, message.Value)
 	if err != nil {
-		Logger.Println("[WARNING] Redis set error:", err)
+		Logger.Warn("Redis set error:", err)
 		return
 	}
 }
@@ -60,7 +60,7 @@ func (r *Redis) SetToRedisWithExpire(message MessageForRedis, expire int, uuid s
 	defer conn.Close()
 	_, err := conn.Do("SETEX", message.Key, expire, message.Value)
 	if err != nil {
-		Logger.Println("[MESSAGE ERROR] Redis set error:", err, "uuid is:", uuid)
+		Logger.Warn("Redis set error:", err, "uuid is:", uuid)
 		return
 	}
 }
@@ -73,7 +73,7 @@ func (r *Redis) GetUserAllKeys(keyPrefix string) (allKeys []string) {
 	for {
 		// we scan with our iter offset, starting at 0
 		if arr, err := redis.MultiBulk(conn.Do("SCAN", iter, MATCH, keyPrefix)); err != nil {
-			Logger.Println("[ERROR] Redis sacn error:", err, "KeyPrefix is:", keyPrefix)
+			Logger.Error("Redis sacn error:", err, "KeyPrefix is:", keyPrefix)
 		} else {
 			// now we get the iter and the keys from the multi-bulk reply
 			iter, _ = redis.Int(arr[0], nil)
@@ -93,7 +93,7 @@ func (r *Redis) GetFromRedis(key string) (result string) {
 	defer conn.Close()
 	result, err := redis.String(conn.Do("GET", key))
 	if err != nil {
-		Logger.Println("[ERROR] Redis get error:", err, "Key is:", key)
+		Logger.Error("Redis get error:", err, "Key is:", key)
 		return
 	}
 	return

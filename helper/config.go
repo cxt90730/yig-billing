@@ -15,6 +15,7 @@ type Config struct {
 	UsageDataDir          string        `toml:"usage_data_dir"`
 	BucketUsageDataDir    string        `toml:"bucket_usage_data_dir"`
 	LogPath               string        `toml:"log_path"`
+	LogLevel              string        `toml:"log_level"` // "info", "warn", "error"
 	EnablePostBillingCron bool          `toml:"enable_post_billing_cron"`
 	PostBillingSpec       string        `toml:"post_billing_spec"`
 	SparkHome             string        `toml:"spark_home"`
