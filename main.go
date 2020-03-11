@@ -4,6 +4,7 @@ import (
 	"github.com/journeymidnight/yig-billing/billing"
 	"github.com/journeymidnight/yig-billing/helper"
 	"github.com/journeymidnight/yig-billing/log"
+	"github.com/journeymidnight/yig-billing/mapreduce"
 	"github.com/journeymidnight/yig-billing/messagebus"
 	"github.com/journeymidnight/yig-billing/redis"
 	"os"
@@ -28,6 +29,8 @@ func main() {
 
 	// Start billing server
 	go billing.Billing()
+	// Start map-reduce gRPC server
+	go mapreduce.StartServer()
 
 	signal.Ignore()
 	signalQueue := make(chan os.Signal)
