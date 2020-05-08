@@ -1,7 +1,7 @@
 package redis
 
 import (
-	"github.com/garyburd/redigo/redis"
+	"github.com/go-redis/redis/v7"
 	. "github.com/journeymidnight/yig-billing/helper"
 	"time"
 )
@@ -18,83 +18,189 @@ type MessageForRedis struct {
 	Value string
 }
 
-type Redis struct {
-	pool *redis.Pool
+type Redis interface {
+	SetToRedis(message MessageForRedis)
+	SetToRedisWithExpire(message MessageForRedis, expire int, uuid string)
+	GetUserAllKeys(keyPrefix string) (allKeys []string)
+	GetFromRedis(key string) (result string)
+	Close()
 }
 
-var RedisConn *Redis
+var RedisConn Redis
 
 func NewRedisConn() {
-	pwd := redis.DialPassword(Conf.RedisPassword)
-	RedisConn = new(Redis)
-	RedisConn.pool = &redis.Pool{
-		MaxIdle:     3,
-		IdleTimeout: 60 * time.Second,
-		Dial: func() (redis.Conn, error) {
-			c, err := redis.Dial("tcp", Conf.RedisUrl, pwd)
-			if err != nil {
-				return nil, err
-			}
-			return c, err
-		},
-		TestOnBorrow: func(c redis.Conn, t time.Time) error {
-			_, err := c.Do("PING")
-			return err
-		},
+	switch Conf.RedisStore {
+	case "single":
+		r := NewRedisSingle()
+		RedisConn = r.(Redis)
+	case "cluster":
+		r := NewRedisCluster()
+		RedisConn = r.(Redis)
+	default:
+		r := NewRedisSingle()
+		RedisConn = r.(Redis)
 	}
-	Logger.Info("Initialize redis successfully")
+	Logger.Info("Initialize redis successfully with ", Conf.RedisStore)
 }
 
-func (r *Redis) SetToRedis(message MessageForRedis) {
-	conn := r.pool.Get()
+type SingleRedis struct {
+	client *redis.Client
+}
+
+func NewRedisSingle() interface{} {
+	options := &redis.Options{
+		Addr:         Conf.RedisUrl,
+		DialTimeout:  time.Duration(60) * time.Second,
+		ReadTimeout:  time.Duration(5) * time.Second,
+		WriteTimeout: time.Duration(5) * time.Second,
+		IdleTimeout:  time.Duration(5) * time.Second,
+	}
+	if Conf.RedisPassword != "" {
+		options.Password = Conf.RedisPassword
+	}
+	client := redis.NewClient(options)
+	_, err := client.Ping().Result()
+	if err != nil {
+		Logger.Error("redis PING err:", err)
+		return nil
+	}
+	r := &SingleRedis{client: client}
+	return interface{}(r)
+}
+
+func (r *SingleRedis) SetToRedis(message MessageForRedis) {
+	conn := r.client.Conn()
 	defer conn.Close()
-	_, err := conn.Do("SET", message.Key, message.Value)
+	_, err := conn.Set(message.Key, message.Value, 0).Result()
 	if err != nil {
 		Logger.Warn("Redis set error:", err)
 		return
 	}
 }
 
-func (r *Redis) SetToRedisWithExpire(message MessageForRedis, expire int, uuid string) {
-	conn := r.pool.Get()
+func (r *SingleRedis) SetToRedisWithExpire(message MessageForRedis, expire int, uuid string) {
+	conn := r.client.Conn()
 	defer conn.Close()
-	_, err := conn.Do("SETEX", message.Key, expire, message.Value)
+	_, err := conn.Set(message.Key, message.Value, time.Duration(expire)*time.Second).Result()
 	if err != nil {
 		Logger.Warn("Redis set error:", err, "uuid is:", uuid)
 		return
 	}
 }
 
-func (r *Redis) GetUserAllKeys(keyPrefix string) (allKeys []string) {
-	conn := r.pool.Get()
+func (r *SingleRedis) GetUserAllKeys(keyPrefix string) (allKeys []string) {
+	conn := r.client.Conn()
 	defer conn.Close()
-	iter := 0
-	var keys []string
+	var cursor uint64
 	for {
+		var keys []string
+		var err error
 		// we scan with our iter offset, starting at 0
-		if arr, err := redis.MultiBulk(conn.Do("SCAN", iter, MATCH, keyPrefix)); err != nil {
-			Logger.Error("Redis sacn error:", err, "KeyPrefix is:", keyPrefix)
-		} else {
-			// now we get the iter and the keys from the multi-bulk reply
-			iter, _ = redis.Int(arr[0], nil)
-			keys, _ = redis.Strings(arr[1], nil)
+		keys, cursor, err = conn.Scan(cursor, keyPrefix, 10).Result()
+		if err != nil {
+			panic(err)
 		}
 		allKeys = append(allKeys, keys...)
 		// check if we need to stop...
-		if iter == 0 {
+		if cursor == 0 {
 			break
 		}
 	}
 	return
 }
 
-func (r *Redis) GetFromRedis(key string) (result string) {
-	conn := r.pool.Get()
+func (r *SingleRedis) GetFromRedis(key string) (result string) {
+	conn := r.client.Conn()
 	defer conn.Close()
-	result, err := redis.String(conn.Do("GET", key))
+	result, err := conn.Get(key).Result()
 	if err != nil {
 		Logger.Error("Redis get error:", err, "Key is:", key)
 		return
 	}
 	return
+}
+
+func (s *SingleRedis) Close() {
+	if err := s.client.Close(); err != nil {
+		Logger.Error("can not close redis client. err:", err)
+	}
+}
+
+type ClusterRedis struct {
+	cluster *redis.ClusterClient
+}
+
+func NewRedisCluster() interface{} {
+	clusterRedis := &redis.ClusterOptions{
+		Addrs:        Conf.RedisGroup,
+		DialTimeout:  time.Duration(60) * time.Second,
+		ReadTimeout:  time.Duration(5) * time.Second,
+		WriteTimeout: time.Duration(5) * time.Second,
+		IdleTimeout:  time.Duration(5) * time.Second,
+	}
+	if Conf.RedisPassword != "" {
+		clusterRedis.Password = Conf.RedisPassword
+	}
+	cluster := redis.NewClusterClient(clusterRedis)
+	_, err := cluster.Ping().Result()
+	if err != nil {
+		Logger.Error("Cluster Mode redis PING err:", err)
+		return nil
+	}
+	r := &ClusterRedis{cluster: cluster}
+	return interface{}(r)
+}
+
+func (r *ClusterRedis) SetToRedis(message MessageForRedis) {
+	conn := r.cluster
+	_, err := conn.Set(message.Key, message.Value, 0).Result()
+	if err != nil {
+		Logger.Warn("Redis set error:", err)
+		return
+	}
+}
+
+func (r *ClusterRedis) SetToRedisWithExpire(message MessageForRedis, expire int, uuid string) {
+	conn := r.cluster
+	_, err := conn.Set(message.Key, message.Value, time.Duration(expire)*time.Second).Result()
+	if err != nil {
+		Logger.Warn("Redis set error:", err, "uuid is:", uuid)
+		return
+	}
+}
+
+func (r *ClusterRedis) GetUserAllKeys(keyPrefix string) (allKeys []string) {
+	conn := r.cluster
+	var cursor uint64
+	for {
+		var keys []string
+		var err error
+		// we scan with our iter offset, starting at 0
+		keys, cursor, err = conn.Scan(cursor, keyPrefix, 10).Result()
+		if err != nil {
+			panic(err)
+		}
+		allKeys = append(allKeys, keys...)
+		// check if we need to stop...
+		if cursor == 0 {
+			break
+		}
+	}
+	return
+}
+
+func (r *ClusterRedis) GetFromRedis(key string) (result string) {
+	conn := r.cluster
+	result, err := conn.Get(key).Result()
+	if err != nil {
+		Logger.Error("Redis get error:", err, "Key is:", key)
+		return
+	}
+	return
+}
+
+func (s *ClusterRedis) Close() {
+	if err := s.cluster.Close(); err != nil {
+		Logger.Error("can not close redis cluster err:", err)
+	}
 }

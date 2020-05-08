@@ -12,7 +12,9 @@ tispark_shell = "/etc/yig/fetch_usage.sh"
 tispark_shell_bucket = "/etc/yig/fetch_usage_bucket.sh"
 
 enable_usage_cache = true
+redis_store = "single"
 redis_url = "10.5.0.8:6379"
+redis_group = ["10.5.0.8:6379"]
 redis_password = "hehehehe"
 
 kafka_server = "kafka:29092"

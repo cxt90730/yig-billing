@@ -22,7 +22,9 @@ type Config struct {
 	TisparkShell          string        `toml:"tispark_shell"`
 	TisparkShellBucket    string        `toml:"tispark_shell_bucket"`
 	Producer              DummyProducer `toml:"producer"`
+	RedisStore            string        `toml:"redis_store"` // Choose redis connection method
 	RedisUrl              string        `toml:"redis_url"`
+	RedisGroup            []string      `toml:"redis_group"` // Redis cluster connection address
 	RedisPassword         string        `toml:"redis_password"`
 	EnableUsageCache      bool          `toml:"enable_usage_cache"`
 	KafkaServer           string        `toml:"kafka_server"`

@@ -23,6 +23,7 @@ func main() {
 	helper.Logger.Info("YIG instance ID:", helper.GenerateRandomId())
 	// Initialize Redis config
 	redis.NewRedisConn()
+	defer redis.RedisConn.Close()
 	// Initialize kafka consumer
 	messagebus.NewConsumer()
 
