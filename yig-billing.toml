@@ -1,3 +1,11 @@
+# the config of yig-restore
+
+##  Distributed lock configuration
+lock_time = 1           # 1min, Note that the time set here must be greater than the refresh time, otherwise it will cause the lock to be released in advance to complete the operation
+refresh_lock_time = 30  # @every 30s
+check_point = 10        # 10min, Check if the billing calculation is completed,The time must be less than the calculation period of the push
+lock_store = "redis"
+
 prometheus_url = "http://prometheus_url"
 region_id = "region_id"
 usage_data_dir = "/tmp/usage"

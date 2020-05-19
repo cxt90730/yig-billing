@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	. "github.com/journeymidnight/yig-billing/helper"
+	"github.com/journeymidnight/yig-billing/lock"
 	"github.com/journeymidnight/yig-billing/prometheus"
 	"github.com/journeymidnight/yig-billing/redis"
 	"github.com/journeymidnight/yig-billing/spark"
@@ -51,6 +52,20 @@ const folderLayoutStr = "2006010215"
 
 func postBilling() {
 	wg := new(sync.WaitGroup)
+	bl := lock.BillingLock
+	// Open lock to maintain Ctrip
+	go bl.AutoRefreshLock()
+	// If the lock cannot be obtained, it acts as a standby node. When the working node fails, the standby node starts to work.
+	if !bl.GetOperatorPermission() {
+		Logger.Info("The node has become the standby node in this period......")
+		// Check if the master node is invalid, and exit the method if it completes successfully
+		if !bl.StandbyStart() {
+			Logger.Info("The work node completed successfully, exit the work process, and wait for the next moment......")
+			return
+		} else {
+			Logger.Warn("The work process is invalid, the election is started as the work process...")
+		}
+	}
 	Logger.Info("Begin to runBilling", time.Now().Format("2006-01-02 15:04:05"))
 	task := new(Task)
 	task.PidCache = make(map[string][]BillingUsage)
@@ -111,7 +126,8 @@ func postBilling() {
 	consumeTime := endPostBillingTime - startPostBillingTime
 	Logger.Info("Finish runBilling", time.Now().Format("2006-01-02 15:04:05"), "consumed time:", consumeTime, "ms")
 	wg.Wait()
-
+	bl.FinishedNotification()
+	Logger.Info("The work is completed during this period, and the work pipeline is exited")
 }
 
 func Send(p Producer, data []byte) error {

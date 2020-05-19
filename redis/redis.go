@@ -1,9 +1,11 @@
 package redis
 
 import (
+	"time"
+
+	"github.com/bsm/redislock"
 	"github.com/go-redis/redis/v7"
 	. "github.com/journeymidnight/yig-billing/helper"
-	"time"
 )
 
 const (
@@ -20,6 +22,7 @@ type MessageForRedis struct {
 
 type Redis interface {
 	SetToRedis(message MessageForRedis)
+	SetNXToRedis(message MessageForRedis, expire int) (bool, error)
 	SetToRedisWithExpire(message MessageForRedis, expire int, uuid string)
 	GetUserAllKeys(keyPrefix string) (allKeys []string)
 	GetFromRedis(key string) (result string)
@@ -27,6 +30,8 @@ type Redis interface {
 }
 
 var RedisConn Redis
+var RedisClient redislock.RedisClient
+var Locker *redislock.Client
 
 func NewRedisConn() {
 	switch Conf.RedisStore {
@@ -40,6 +45,7 @@ func NewRedisConn() {
 		r := NewRedisSingle()
 		RedisConn = r.(Redis)
 	}
+	Locker = redislock.New(RedisClient)
 	Logger.Info("Initialize redis successfully with ", Conf.RedisStore)
 }
 
@@ -64,6 +70,7 @@ func NewRedisSingle() interface{} {
 		Logger.Error("redis PING err:", err)
 		return nil
 	}
+	RedisClient = client
 	r := &SingleRedis{client: client}
 	return interface{}(r)
 }
@@ -86,6 +93,17 @@ func (r *SingleRedis) SetToRedisWithExpire(message MessageForRedis, expire int, 
 		Logger.Warn("Redis set error:", err, "uuid is:", uuid)
 		return
 	}
+}
+
+func (r *SingleRedis) SetNXToRedis(message MessageForRedis, expire int) (bool, error) {
+	conn := r.client.Conn()
+	defer conn.Close()
+	isSuccessful, err := conn.SetNX(message.Key, message.Value, time.Duration(expire)*time.Second).Result()
+	if err != nil {
+		Logger.Warn("Redis setnx error:", err)
+		return false, err
+	}
+	return isSuccessful, err
 }
 
 func (r *SingleRedis) GetUserAllKeys(keyPrefix string) (allKeys []string) {
@@ -147,6 +165,7 @@ func NewRedisCluster() interface{} {
 		Logger.Error("Cluster Mode redis PING err:", err)
 		return nil
 	}
+	RedisClient = cluster
 	r := &ClusterRedis{cluster: cluster}
 	return interface{}(r)
 }
@@ -158,6 +177,16 @@ func (r *ClusterRedis) SetToRedis(message MessageForRedis) {
 		Logger.Warn("Redis set error:", err)
 		return
 	}
+}
+
+func (r *ClusterRedis) SetNXToRedis(message MessageForRedis, expire int) (bool, error) {
+	conn := r.cluster
+	isSuccessful, err := conn.SetNX(message.Key, message.Value, time.Duration(expire)*time.Second).Result()
+	if err != nil {
+		Logger.Warn("Redis setnx error:", err)
+		return false, err
+	}
+	return isSuccessful, err
 }
 
 func (r *ClusterRedis) SetToRedisWithExpire(message MessageForRedis, expire int, uuid string) {
