@@ -6,6 +6,7 @@ type Lock interface {
 	AutoRefreshLock()
 	GetOperatorPermission() bool
 	FinishedNotification()
+	ExceptionNotCompleted()
 	StandbyStart() bool
 }
 

@@ -53,8 +53,6 @@ const folderLayoutStr = "2006010215"
 func postBilling() {
 	wg := new(sync.WaitGroup)
 	bl := lock.BillingLock
-	// Open lock to maintain Ctrip
-	go bl.AutoRefreshLock()
 	// If the lock cannot be obtained, it acts as a standby node. When the working node fails, the standby node starts to work.
 	if !bl.GetOperatorPermission() {
 		Logger.Info("The node has become the standby node in this period......")
@@ -65,6 +63,9 @@ func postBilling() {
 		} else {
 			Logger.Warn("The work process is invalid, the election is started as the work process...")
 		}
+	} else {
+		// Open lock to maintain Ctrip
+		go bl.AutoRefreshLock()
 	}
 	Logger.Info("Begin to runBilling", time.Now().Format("2006-01-02 15:04:05"))
 	task := new(Task)
@@ -110,6 +111,7 @@ func postBilling() {
 	sendingData, err := json.Marshal(task.BillingData)
 	if err != nil {
 		Logger.Error("json.Marshal", task.BillingData, "error:", err)
+		bl.ExceptionNotCompleted()
 		return
 	}
 
@@ -119,6 +121,7 @@ func postBilling() {
 	err = Send(Conf.Producer, sendingData)
 	if err != nil {
 		Logger.Error("Sending data error:", err)
+		bl.ExceptionNotCompleted()
 		return
 	}
 	// Sending data
