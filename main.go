@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/journeymidnight/yig-billing/billing"
 	"github.com/journeymidnight/yig-billing/helper"
+	"github.com/journeymidnight/yig-billing/lock"
 	"github.com/journeymidnight/yig-billing/log"
 	"github.com/journeymidnight/yig-billing/messagebus"
 	"github.com/journeymidnight/yig-billing/redis"
@@ -26,6 +27,9 @@ func main() {
 	defer redis.RedisConn.Close()
 	// Initialize kafka consumer
 	messagebus.NewConsumer()
+
+	// Initialize distributed lock
+	lock.NewLock()
 
 	// Start billing server
 	go billing.Billing()

@@ -10,6 +10,10 @@ const configPath = "/etc/yig/yig-billing.toml"
 var Conf Config
 
 type Config struct {
+	LockTime              int           `toml:"lock_time"`
+	RefreshLockTime       int           `toml:"refresh_lock_time"`
+	CheckPoint            int           `toml:"check_point"`
+	LockStore             string        `toml:"lock_store"`
 	PrometheusUrl         string        `toml:"prometheus_url"`
 	RegionId              string        `toml:"region_id"`
 	UsageDataDir          string        `toml:"usage_data_dir"`
