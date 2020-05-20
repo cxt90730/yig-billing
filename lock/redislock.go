@@ -101,7 +101,7 @@ func (r *RedisLock) StandbyStart() bool {
 	}
 	count := 0
 	timeout := make(chan bool)
-	c := time.Tick(time.Duration(helper.Conf.CheckPoint) * time.Minute)
+	c := time.Tick(time.Duration(helper.Conf.CheckPoint) * time.Second)
 	for {
 		select {
 		case <-c:
@@ -135,5 +135,9 @@ func isFinished() bool {
 
 func getMaxRetries() int {
 	c := helper.Conf
+	if c.BillingPeriod <= 0 || c.CheckPoint <= 0 {
+		c.BillingPeriod = 3600
+		c.CheckPoint = 600
+	}
 	return c.BillingPeriod/c.CheckPoint - 1
 }
