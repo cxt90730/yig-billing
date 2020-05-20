@@ -13,6 +13,7 @@ type Config struct {
 	LockTime              int           `toml:"lock_time"`
 	RefreshLockTime       int           `toml:"refresh_lock_time"`
 	CheckPoint            int           `toml:"check_point"`
+	BillingPeriod         int           `toml:"billing_period"`
 	LockStore             string        `toml:"lock_store"`
 	PrometheusUrl         string        `toml:"prometheus_url"`
 	RegionId              string        `toml:"region_id"`

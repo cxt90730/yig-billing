@@ -15,8 +15,9 @@ const (
 )
 
 var (
-	Down  bool
-	mutex *redislock.Lock
+	Down       bool
+	mutex      *redislock.Lock
+	MaxRetries int
 )
 
 type RedisLock struct{}
@@ -48,6 +49,7 @@ func (r *RedisLock) AutoRefreshLock() {
 
 func (r *RedisLock) GetOperatorPermission() bool {
 	Down = false
+	MaxRetries = getMaxRetries()
 	m, err := redis.Locker.Obtain(YIG_BILLING_LOCK, time.Duration(helper.Conf.LockTime)*time.Minute, nil)
 	if err == redislock.ErrNotObtained {
 		helper.Logger.Error("Failed to obtain work permission!")
@@ -109,7 +111,7 @@ func (r *RedisLock) StandbyStart() bool {
 					return true
 				}
 				count++
-				if count == 8 {
+				if count == MaxRetries {
 					timeout <- true
 				}
 				continue
@@ -129,4 +131,9 @@ func isFinished() bool {
 		return true
 	}
 	return false
+}
+
+func getMaxRetries() int {
+	c := helper.Conf
+	return c.BillingPeriod/c.CheckPoint - 1
 }
