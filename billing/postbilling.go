@@ -23,8 +23,9 @@ const (
 	BillingTypeTraffic      = "TRAFFIC"
 	BillingTypeDataRetrieve = "DATARETRIEVE"
 	BillingTypeDataRestore  = "RESTORE"
+	BillingTypeEcs          = "ECS"
 	LoggerBucketInfo        = "PLUGIN LOG"
-	LoggerBuckteError       = "WARRING BUT NOT IMPORTANT"
+	LoggerBucketError       = "WARRING BUT NOT IMPORTANT"
 )
 
 type BatchUsage struct {
@@ -76,7 +77,8 @@ func postBilling() {
 	// Get Usages by Redis which Standard_IA and Glacier object had been deleted
 	task.ConstructDeletedUsage()
 	// Get Usages by '.csv' file exported by TiSpark
-	task.ConstructUsageData(Conf.TisparkShell)
+	task.ConstructUsageData(Conf.TisparkShell, false)
+	task.ConstructUsageData(Conf.TisparkShellEcs, true)
 	// Get Traffic From Prometheus
 	task.ConstructTrafficData()
 	// Get Standard_IA DataRetrieve from Prometheus
@@ -146,7 +148,7 @@ type Task struct {
 
 func (t *Task) cacheUsageToRedis(wg *sync.WaitGroup) {
 	var messages []redis.MessageForRedis
-	t.ConstructUsageData(Conf.TisparkShellBucket)
+	t.ConstructUsageData(Conf.TisparkShellBucket, false)
 	// Start Billing Usage to Redis
 	Logger.Info("Start Calculate Usage", time.Now().Format("2006-01-02 15:04:05"))
 	// SetToRedis
@@ -227,15 +229,13 @@ func (t *Task) ConstructDeletedUsage() {
 	Logger.Info("Finish ConstructDeletedUsage", time.Now().Format("2006-01-02 15:04:05"))
 }
 
-func (t *Task) ConstructUsageData(path string) {
-	var loggerUsageInfo, loggerUsageError string
+func (t *Task) ConstructUsageData(path string, forceBillingTypeEcs bool) {
+	var loggerUsageInfo string
 	key := path
 	if key == Conf.TisparkShellBucket {
 		loggerUsageInfo = LoggerBucketInfo
-		loggerUsageError = LoggerBuckteError
 	} else {
 		loggerUsageInfo = ""
-		loggerUsageError = ""
 	}
 	hour := time.Now().Format(folderLayoutStr)
 	usageDataDir := Conf.UsageDataDir + string(os.PathSeparator) + hour
@@ -255,13 +255,14 @@ func (t *Task) ConstructUsageData(path string) {
 		if strings.HasSuffix(fi.Name(), ".csv") {
 			filePath := usageDataDir + string(os.PathSeparator) + fi.Name()
 			Logger.Info(loggerUsageInfo, "Read File:", filePath)
-			t.ConstructUsageDataByFile(loggerUsageInfo, loggerUsageError, key, filePath)
+			t.ConstructUsageDataByFile(loggerUsageInfo, key, filePath, forceBillingTypeEcs)
 			break
 		}
 	}
 }
 
-func (t *Task) ConstructUsageDataByFile(loggerUsageInfo, loggerUsageError, key, filePath string) {
+func (t *Task) ConstructUsageDataByFile(loggerUsageInfo, key, filePath string,
+	forceBillingTypeEcs bool) {
 	Logger.Info(loggerUsageInfo, "Begin to ConstructUsageDataByFile", time.Now().Format("2006-01-02 15:04:05"))
 	f, err := os.Open(filePath)
 	if err != nil {
@@ -283,7 +284,12 @@ func (t *Task) ConstructUsageDataByFile(loggerUsageInfo, loggerUsageError, key, 
 			Logger.Error("strconv.Atoi", data[1], "error:", err)
 			continue
 		}
-		usageType := StorageClassIndexMap[(StorageClass(usageTypeIndex))]
+		var usageType string
+		if forceBillingTypeEcs {
+			usageType = BillingTypeEcs
+		} else {
+			usageType = StorageClassIndexMap[(StorageClass(usageTypeIndex))]
+		}
 		usageCountFlout, err := strconv.ParseFloat(data[2], 64)
 		if err != nil {
 			Logger.Error("strconv.ParseFloat", data[2], "error:", err)

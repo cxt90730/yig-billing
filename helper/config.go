@@ -26,6 +26,7 @@ type Config struct {
 	SparkHome             string        `toml:"spark_home"`
 	TisparkShell          string        `toml:"tispark_shell"`
 	TisparkShellBucket    string        `toml:"tispark_shell_bucket"`
+	TisparkShellEcs       string        `toml:"tispark_shell_ecs"`
 	Producer              DummyProducer `toml:"producer"`
 	RedisStore            string        `toml:"redis_store"` // Choose redis connection method
 	RedisUrl              string        `toml:"redis_url"`
