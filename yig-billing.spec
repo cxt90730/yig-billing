@@ -48,6 +48,9 @@ rm -rf %{buildroot}
 /usr/lib/systemd/system/yig-billing.service
 /etc/logrotate.d/yig-billing.logrotate
 %config(noreplace) /etc/yig/yig-billing.toml
+%config(noreplace) /etc/yig/fetch_usage.sh
+%config(noreplace) /etc/yig/fetch_usage_bucket.sh
+%config(noreplace) /etc/yig/fetch_usage_ecs.sh
 %config(noreplace) /etc/yum.repos.d/confluent.repo
 
 %changelog
