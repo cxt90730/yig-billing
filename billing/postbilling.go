@@ -190,7 +190,10 @@ func (t *Task) ConstructCache(pid, usageType string, usageCount uint64) {
 
 func (t *Task) ConstructDeletedUsage() {
 	t.OtherStorageClassDeletedCache = make(map[string]BillingUsageCache)
-	allKeys := redis.RedisConn.GetUserAllKeys(redis.BillingUsagePrefix + "*")
+	allKeys, err := redis.RedisConn.GetUserAllKeys(redis.BillingUsagePrefix + "*")
+	if err != nil {
+		Logger.Error("ConstructDeletedUsage return is:", t.OtherStorageClassDeletedCache)
+	}
 	if len(allKeys) > 0 {
 		for _, key := range allKeys {
 			keyMembers := strings.Split(key, ":")

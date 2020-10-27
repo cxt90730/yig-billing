@@ -24,7 +24,7 @@ type Redis interface {
 	SetToRedis(message MessageForRedis)
 	SetNXToRedis(message MessageForRedis, expire int) (bool, error)
 	SetToRedisWithExpire(message MessageForRedis, expire int, uuid string)
-	GetUserAllKeys(keyPrefix string) (allKeys []string)
+	GetUserAllKeys(keyPrefix string) (allKeys []string, err error)
 	GetFromRedis(key string) (result string)
 	Close()
 }
@@ -106,17 +106,16 @@ func (r *SingleRedis) SetNXToRedis(message MessageForRedis, expire int) (bool, e
 	return isSuccessful, err
 }
 
-func (r *SingleRedis) GetUserAllKeys(keyPrefix string) (allKeys []string) {
+func (r *SingleRedis) GetUserAllKeys(keyPrefix string) (allKeys []string, err error) {
 	conn := r.client.Conn()
 	defer conn.Close()
 	var cursor uint64
 	for {
 		var keys []string
-		var err error
 		// we scan with our iter offset, starting at 0
 		keys, cursor, err = conn.Scan(cursor, keyPrefix, 10).Result()
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
 		allKeys = append(allKeys, keys...)
 		// check if we need to stop...
@@ -198,22 +197,28 @@ func (r *ClusterRedis) SetToRedisWithExpire(message MessageForRedis, expire int,
 	}
 }
 
-func (r *ClusterRedis) GetUserAllKeys(keyPrefix string) (allKeys []string) {
+func (r *ClusterRedis) GetUserAllKeys(keyPrefix string) (allKeys []string, err error) {
 	conn := r.cluster
-	var cursor uint64
-	for {
-		var keys []string
-		var err error
-		// we scan with our iter offset, starting at 0
-		keys, cursor, err = conn.Scan(cursor, keyPrefix, 10).Result()
-		if err != nil {
-			panic(err)
-		}
-		allKeys = append(allKeys, keys...)
-		// check if we need to stop...
-		if cursor == 0 {
-			break
-		}
+	err = conn.ForEachNode(
+		func(conn *redis.Client) error {
+			var cursor uint64
+			for {
+				var keys []string
+				// we scan with our iter offset, starting at 0
+				keys, cursor, err = conn.Scan(cursor, keyPrefix, 1000).Result()
+				if err != nil {
+					return err
+				}
+				allKeys = append(allKeys, keys...)
+				// check if we need to stop...
+				if cursor == 0 {
+					break
+				}
+			}
+			return nil
+		})
+	if err != nil {
+		return nil, err
 	}
 	return
 }
