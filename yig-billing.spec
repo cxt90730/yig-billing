@@ -31,6 +31,7 @@ install -D -m 644 yig-billing.logrotate %{buildroot}/etc/logrotate.d/yig-billing
 install -D -m 644 yig-billing.toml %{buildroot}%{_sysconfdir}/yig/yig-billing.toml
 install -D -m 644 fetch_usage.sh %{buildroot}%{_sysconfdir}/yig/fetch_usage.sh
 install -D -m 644 fetch_usage_bucket.sh %{buildroot}%{_sysconfdir}/yig/fetch_usage_bucket.sh
+install -D -m 644 fetch_usage_ecs.sh %{buildroot}%{_sysconfdir}/yig/fetch_usage_ecs.sh
 install -D -m 644 confluent.repo %{buildroot}/etc/yum.repos.d/confluent.repo
 
 %post
@@ -49,6 +50,7 @@ rm -rf %{buildroot}
 %config(noreplace) /etc/yig/yig-billing.toml
 %config(noreplace) /etc/yig/fetch_usage.sh
 %config(noreplace) /etc/yig/fetch_usage_bucket.sh
+%config(noreplace) /etc/yig/fetch_usage_ecs.sh
 %config(noreplace) /etc/yum.repos.d/confluent.repo
 
 %changelog
