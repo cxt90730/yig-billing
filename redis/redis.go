@@ -199,7 +199,7 @@ func (r *ClusterRedis) SetToRedisWithExpire(message MessageForRedis, expire int,
 
 func (r *ClusterRedis) GetUserAllKeys(keyPrefix string) (allKeys []string, err error) {
 	conn := r.cluster
-	err = conn.ForEachNode(
+	err = conn.ForEachMaster(
 		func(conn *redis.Client) error {
 			var cursor uint64
 			for {
