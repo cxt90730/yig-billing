@@ -31,7 +31,7 @@ func NewConsumer() {
 
 func StartConsumerReceiver() {
 	for {
-		msg, err := KafkaConsumer.consumer.ReadMessage(4 * time.Minute)
+		msg, err := KafkaConsumer.consumer.ReadMessage(time.Duration(Conf.KafkaPollTimeout) * time.Minute)
 		if err == nil {
 			if len(msg.Value) > 0 {
 				kafkaMessages := make(map[string]string)

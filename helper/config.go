@@ -36,6 +36,7 @@ type Config struct {
 	KafkaServer           string        `toml:"kafka_server"`
 	KafkaGroupId          string        `toml:"kafka_group_id"`
 	KafkaTopic            string        `toml:"kafka_topic"`
+	KafkaPollTimeout      int           `toml:"kafka_poll_timeout"`
 }
 
 func ReadConfig() {
