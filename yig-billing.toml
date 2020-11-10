@@ -29,6 +29,7 @@ redis_password = "hehehehe"
 kafka_server = "kafka:29092"
 kafka_group_id = "myGroup"
 kafka_topic = "testTopic2"
+kafka_poll_timeout = 4      # minute
 
 [producer]
 url="url"
