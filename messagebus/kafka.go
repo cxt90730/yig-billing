@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	. "github.com/journeymidnight/yig-billing/helper"
 	"github.com/ugorji/go/codec"
+	"time"
 )
 
 func NewConsumer() {
@@ -30,7 +31,7 @@ func NewConsumer() {
 
 func StartConsumerReceiver() {
 	for {
-		msg, err := KafkaConsumer.consumer.ReadMessage(-1)
+		msg, err := KafkaConsumer.consumer.ReadMessage(4 * time.Minute)
 		if err == nil {
 			if len(msg.Value) > 0 {
 				kafkaMessages := make(map[string]string)
